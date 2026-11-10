@@ -45,9 +45,11 @@ jobs:
           key: sccache-glass-windows2022-x64-6.9.3
 
       - name: Cache Conan packages
-        uses: actions/cache@v5
+        id: conan-cache
+        uses: actions/cache/restore@v5
         with:
-          key: Windows2022-X64-conan-user-${{ hashFiles('**/conanfile.py') }}-QT6-libwebm-conforming
+          key: Windows2022-X64-conan-user-${{ hashFiles('**/conanfile.py') }}-QT6-libwebm-conforming-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: Windows2022-X64-conan-user-${{ hashFiles('**/conanfile.py') }}-QT6-libwebm-conforming-
           path: ~/.conan2/
 
       - name: Setup Python
@@ -63,7 +65,8 @@ jobs:
           conan profile detect -f
 
       - name: Install dependencies
-        shell: bash
+        id: dependencies
+        shell: pwsh
         env:
           # Keep Conan's tool PATH when libvpx invokes MSBuild (yasm lives there).
           UseEnv: "true"
@@ -71,15 +74,34 @@ jobs:
           mkdir build
           cd build
           # libwebm's nested MasterValueParser lookup needs conforming MSVC lookup.
-          conan install .. \
-              -s build_type=RelWithDebInfo \
-              -c tools.cmake.cmaketoolchain:generator="Ninja" \
-              -c 'libwebm/*:tools.build:cxxflags=["/permissive-"]' \
-              -b missing \
-              -c tools.build:jobs=4 \
-              --output-folder=. \
+          conan install .. `
+              -s build_type=RelWithDebInfo `
+              -c tools.cmake.cmaketoolchain:generator="Ninja" `
+              -c 'libwebm/*:tools.build:cxxflags=["/permissive-"]' `
+              -b missing `
+              -c tools.build:jobs=4 `
+              --output-folder=. `
               -o with_openssl3=True
+          if ($LASTEXITCODE -ne 0) { throw "Conan dependency installation failed" }
           conan cache clean --source --build --download "*"
+
+      - name: Show FFmpeg configure failure
+        if: failure() && steps.dependencies.outcome == 'failure'
+        shell: pwsh
+        run: |
+          Get-ChildItem "$env:USERPROFILE/.conan2/p/b" -Filter config.log -Recurse |
+            Where-Object { $_.FullName -match 'ffbuild[\\/]config\.log$' } |
+            ForEach-Object {
+              Write-Output "FFmpeg configure log: $($_.FullName)"
+              Get-Content $_.FullName -Tail 160
+            }
+
+      - name: Save Conan packages
+        if: always() && steps.conan-cache.outcome == 'success' && steps.dependencies.outcome != 'skipped'
+        uses: actions/cache/save@v5
+        with:
+          key: ${{ steps.conan-cache.outputs.cache-primary-key }}
+          path: ~/.conan2/
 
       - name: Build Moltorino
         shell: pwsh
