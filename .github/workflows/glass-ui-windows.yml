@@ -116,13 +116,13 @@ jobs:
               -DBUILD_WITH_CRASHPAD=Off `
               -DCHATTERINO_LTO=On `
               -DFORCE_JSON_GENERATION=Off `
-              -DCHATTERINO_NIGHTLY_BUILD=On `
+              -DCHATTERINO_NIGHTLY_BUILD=Off `
               -DCHATTERINO_SPELLCHECK=On `
               -DMOLTORINO_VELOPACK=Off `
               ..
           cmake --build . --parallel 4
 
-      - name: Prepare portable Windows build
+      - name: Prepare Windows ZIP build
         working-directory: build
         shell: pwsh
         run: |
@@ -134,18 +134,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "CRT deployment failed" }
           ..\.CI\deploy-crt.ps1 Moltorino-Glass/support/media -Architecture x64
           if ($LASTEXITCODE -ne 0) { throw "Media CRT deployment failed" }
-          Set-Content Moltorino-Glass/modes -Value portable -Encoding ascii
           7z a Moltorino-Windows.zip Moltorino-Glass/
           if ($LASTEXITCODE -ne 0) { throw "ZIP creation failed" }
 
-      - name: Verify portable Windows package
+      - name: Verify Windows package
         working-directory: build
         shell: pwsh
         run: |
           $verifyDir = Join-Path $env:RUNNER_TEMP 'glass-portable-check'
           Expand-Archive Moltorino-Windows.zip -DestinationPath $verifyDir
           $packageDir = Join-Path $verifyDir 'Moltorino-Glass'
-          foreach ($file in @('Moltorino7.exe', 'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Widgets.dll', 'Qt6Network.dll', 'Qt6Sql.dll', 'platforms/qwindows.dll', 'sqldrivers/qsqlite.dll', 'tls/qopensslbackend.dll', 'libssl-3-x64.dll', 'libcrypto-3-x64.dll', 'support/media/ffmpeg.exe', 'support/media/ffprobe.exe', 'support/7zip/7z.exe', 'support/7zip/7z.dll', 'modes')) {
+          foreach ($file in @('Moltorino7.exe', 'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Widgets.dll', 'Qt6Network.dll', 'Qt6Sql.dll', 'platforms/qwindows.dll', 'sqldrivers/qsqlite.dll', 'tls/qopensslbackend.dll', 'libssl-3-x64.dll', 'libcrypto-3-x64.dll', 'support/media/ffmpeg.exe', 'support/media/ffprobe.exe', 'support/7zip/7z.exe', 'support/7zip/7z.dll')) {
             if (!(Test-Path (Join-Path $packageDir $file))) { throw "Missing portable file: $file" }
           }
           # Each executable must resolve its VC runtime without a system install.
