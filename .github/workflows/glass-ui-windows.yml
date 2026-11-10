@@ -1,0 +1,112 @@
+name: Glass UI Windows Test
+
+on:
+  push:
+    branches:
+      - glass-ui-pass-01
+  workflow_dispatch:
+
+env:
+  CONAN_VERSION: 2.28.1
+
+jobs:
+  build-windows:
+    name: Build Glass UI - Windows x64
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Apply Glass UI pass
+        shell: bash
+        run: git apply --check .github/patches/glass-ui-pass-01.patch && git apply .github/patches/glass-ui-pass-01.patch
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4.3.1
+        with:
+          cache: true
+          cache-key-prefix: Windows-QtCache-6.9.3-v2
+          modules: qtimageformats qtsvg
+          version: 6.9.3
+
+      - name: Enable Developer Command Prompt
+        uses: Chatterino/msvc-dev-cmd@v2.0.5
+        with:
+          arch: x64
+
+      - name: Setup sccache
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        with:
+          variant: sccache
+          save: true
+          key: sccache-glass-windows-x64-6.9.3
+
+      - name: Cache Conan packages
+        uses: actions/cache@v5
+        with:
+          key: Windows-X64-conan-user-${{ hashFiles('**/conanfile.py') }}-QT6
+          path: ~/.conan2/
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install and setup Conan
+        shell: bash
+        run: |
+          pip install conan==${CONAN_VERSION}
+          conan --version
+          conan profile detect -f
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          mkdir build
+          cd build
+          conan install .. \
+              -s build_type=RelWithDebInfo \
+              -c tools.cmake.cmaketoolchain:generator="Ninja" \
+              -b missing \
+              -c tools.build:jobs=4 \
+              --output-folder=. \
+              -o with_openssl3=True
+          conan cache clean --source --build --download "*"
+
+      - name: Build Moltorino
+        shell: pwsh
+        run: |
+          cd build
+          cmake `
+              -G Ninja `
+              -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+              -DCMAKE_TOOLCHAIN_FILE="conan_toolchain.cmake" `
+              -DUSE_PRECOMPILED_HEADERS=ON `
+              -DBUILD_WITH_CRASHPAD=Off `
+              -DCHATTERINO_LTO=On `
+              -DFORCE_JSON_GENERATION=Off `
+              -DCHATTERINO_NIGHTLY_BUILD=On `
+              -DCHATTERINO_SPELLCHECK=On `
+              -DMOLTORINO_VELOPACK=Off `
+              ..
+          cmake --build . --parallel 4
+
+      - name: Prepare portable Windows build
+        working-directory: build
+        shell: pwsh
+        run: |
+          windeployqt bin/Moltorino7.exe --release --no-compiler-runtime --no-translations --no-opengl-sw --dir Moltorino-Glass/ --force-openssl
+          Copy-Item bin/Moltorino7.exe Moltorino-Glass/
+          Copy-Item -Recurse bin/licenses Moltorino-Glass/
+          ..\.CI\deploy-crt.ps1 Moltorino-Glass -Architecture x64
+          7z a Moltorino-Glass-Pass-01-Windows-x64.zip Moltorino-Glass/
+
+      - name: Upload Glass UI Windows build
+        uses: actions/upload-artifact@v7
+        with:
+          name: Moltorino-Glass-Pass-01-Windows-x64
+          path: build/Moltorino-Glass-Pass-01-Windows-x64.zip
+          retention-days: 14
