@@ -5,6 +5,7 @@
 #include "widgets/Scrollbar.hpp"
 
 #include "common/QLogging.hpp"
+#include "common/UiPalette.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
@@ -37,13 +38,20 @@ Scrollbar::Scrollbar(size_t messagesLimit, ChannelView *parent)
     , highlightsLimit_(messagesLimit)
     , highlights_(messagesLimit)
 {
-    this->resize(static_cast<int>(16 * this->scale()), 100);
+    this->resize(static_cast<int>(12 * this->scale()), 100);
     this->currentValueAnimation_.setDuration(150);
     this->currentValueAnimation_.setEasingCurve(
         QEasingCurve(QEasingCurve::OutCubic));
     connect(&this->currentValueAnimation_, &QAbstractAnimation::finished, this,
             &Scrollbar::resetBounds);
 
+    this->hoverAnimation_.setDuration(140);
+    this->hoverAnimation_.setEasingCurve(QEasingCurve::OutCubic);
+    connect(&this->hoverAnimation_, &QVariantAnimation::valueChanged, this,
+            [this](const QVariant &value) {
+                this->hoverProgress_ = value.toReal();
+                this->update();
+            });
     this->setMouseTracking(true);
 
     getSettings()->hideScrollbarThumb.connect(
@@ -336,32 +344,25 @@ void Scrollbar::printCurrentState(const QString &prefix) const
 
 void Scrollbar::paintEvent(QPaintEvent * /*event*/)
 {
-    bool mouseOver = this->mouseOverLocation_ != MouseLocation::Outside;
-    int xOffset =
-        mouseOver ? 0 : this->width() - static_cast<int>(4.0F * this->scale());
-
     QPainter painter(this);
     painter.fillRect(this->rect(), this->theme->scrollbars.background);
-
     bool enableRedeemedHighlights = getSettings()->enableRedeemedHighlight;
     bool enableFirstMessageHighlights =
         getSettings()->enableFirstMessageHighlight;
-
     if (this->shouldShowThumb())
     {
-        this->thumbRect_.setX(xOffset);
-
-        // mouse over thumb
-        if (this->mouseDownLocation_ == MouseLocation::InsideThumb)
-        {
-            painter.fillRect(this->thumbRect_,
-                             this->theme->scrollbars.thumbSelected);
-        }
-        // mouse not over thumb
-        else
-        {
-            painter.fillRect(this->thumbRect_, this->theme->scrollbars.thumb);
-        }
+        const bool pressed =
+            this->mouseDownLocation_ == MouseLocation::InsideThumb;
+        const qreal amount = pressed ? 1.0 : this->hoverProgress_;
+        const qreal width = (4.0 + 2.0 * amount) * this->scale();
+        const QRectF thumb(this->width() - width - 2 * this->scale(),
+                           this->thumbRect_.top(), width,
+                           this->thumbRect_.height());
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(uiMix(this->theme->scrollbars.thumb,
+                               this->theme->scrollbars.thumbSelected, amount));
+        painter.drawRoundedRect(thumb, width / 2, width / 2);
     }
 
     if (this->shouldShowHighlights() && !this->highlights_.empty())
@@ -418,7 +419,7 @@ void Scrollbar::paintEvent(QPaintEvent * /*event*/)
 
 void Scrollbar::resizeEvent(QResizeEvent * )
 {
-    this->resize(static_cast<int>(16 * this->scale()), this->height());
+    this->resize(static_cast<int>(12 * this->scale()), this->height());
 }
 
 void Scrollbar::mouseMoveEvent(QMouseEvent *event)
@@ -433,6 +434,10 @@ void Scrollbar::mouseMoveEvent(QMouseEvent *event)
         auto moveLocation = this->locationOfMouseEvent(event);
         if (this->mouseOverLocation_ != moveLocation)
         {
+            this->hoverAnimation_.stop();
+            this->hoverAnimation_.setStartValue(this->hoverProgress_);
+            this->hoverAnimation_.setEndValue(1.0);
+            this->hoverAnimation_.start();
             this->mouseOverLocation_ = moveLocation;
             this->update();
         }
@@ -497,6 +502,10 @@ void Scrollbar::mouseReleaseEvent(QMouseEvent *event)
 
 void Scrollbar::leaveEvent(QEvent * )
 {
+    this->hoverAnimation_.stop();
+    this->hoverAnimation_.setStartValue(this->hoverProgress_);
+    this->hoverAnimation_.setEndValue(0.0);
+    this->hoverAnimation_.start();
     this->mouseOverLocation_ = MouseLocation::Outside;
     this->update();
 }

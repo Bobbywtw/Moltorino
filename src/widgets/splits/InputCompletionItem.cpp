@@ -3,6 +3,8 @@
 #include "messages/Emote.hpp"
 #include "messages/Image.hpp"
 
+#include <algorithm>
+
 namespace chatterino {
 
 InputCompletionItem::InputCompletionItem(const EmotePtr &emote,
@@ -31,7 +33,7 @@ void InputCompletionItem::action()
 
 void InputCompletionItem::paint(QPainter *painter, const QRect &rect) const
 {
-    auto margin = 4;
+    auto margin = 6;
     QRect textRect;
     if (this->emote_)
     {
@@ -72,7 +74,11 @@ void InputCompletionItem::paint(QPainter *painter, const QRect &rect) const
                          QSize(rect.width(), rect.height()));
     }
 
-    painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, this->text_);
+    textRect.setRight(rect.right() - margin);
+    painter->drawText(
+        textRect, Qt::AlignLeft | Qt::AlignVCenter,
+        painter->fontMetrics().elidedText(this->text_, Qt::ElideRight,
+                                          std::max(0, textRect.width())));
 }
 
 QSize InputCompletionItem::sizeHint(const QRect &rect) const

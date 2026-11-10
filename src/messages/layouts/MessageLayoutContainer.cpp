@@ -27,7 +27,7 @@ namespace {
 
 using namespace chatterino;
 
-constexpr QMargins MARGIN{8, 4, 8, 4};
+constexpr QMargins MARGIN{12, 5, 12, 5};
 constexpr qreal COMPACT_EMOTES_OFFSET = 4;
 constexpr qreal ASCII_ART_WIDTH = 300.0;
 

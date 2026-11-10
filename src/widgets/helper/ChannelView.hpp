@@ -661,6 +661,11 @@ private:
     bool revealAutoModSelectionOnMaterialize_ = false;
 
     bool hoverAnimateOnly_ = false;
+    std::weak_ptr<MessageLayout> hoveredRow_;
+    QRect hoveredRowRect_;
+    void clearRowHover();
+    void setRowHover(const std::shared_ptr<MessageLayout> &layout,
+                     const QRect &rect);
     bool animatedPicker_ = false;
     const MessageLayoutElement *hoveredLayoutElement_ = nullptr;
     std::weak_ptr<Image> hoveredAnimationImage_;

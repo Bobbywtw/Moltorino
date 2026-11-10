@@ -609,7 +609,7 @@ void BaseWindow::themeChangedEvent()
     if (this->hasCustomWindowFrame())
     {
         QPalette palette;
-        palette.setColor(QPalette::Window, QColor(80, 80, 80, 255));
+        palette.setColor(QPalette::Window, this->theme->window.background);
         palette.setColor(QPalette::WindowText, this->theme->window.text);
         this->setPalette(palette);
 

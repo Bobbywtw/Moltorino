@@ -10,7 +10,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPoint>
-#include <QTimer>
+#include <QVariantAnimation>
 #include <QWidget>
 
 #include <optional>
@@ -21,15 +21,6 @@ class Button : public BaseWidget
 {
     Q_OBJECT
 
-    struct ClickEffect {
-        double progress = 0.0;
-        QPoint position;
-
-        ClickEffect(QPoint _position)
-            : position(_position)
-        {
-        }
-    };
 
 public:
     Button(BaseWidget *parent = nullptr);
@@ -76,6 +67,10 @@ protected:
     virtual void paintContent(QPainter &painter) = 0;
 
     void fancyPaint(QPainter &painter);
+    qreal hoverProgress() const
+    {
+        return this->hoverMultiplier_;
+    }
 
     void invalidateContent();
 
@@ -104,7 +99,7 @@ protected:
     }
 
 private:
-    void onMouseEffectTimeout();
+    void animateHover(bool hovered);
     void showMenu();
 
     void paintButton(QPainter &painter);
@@ -116,8 +111,7 @@ private:
 
     std::unique_ptr<QMenu> menu_;
 
-    QTimer effectTimer_;
-    std::vector<ClickEffect> clickEffects_;
+    QVariantAnimation hoverAnimation_;
     std::optional<QColor> mouseEffectColor_;
 
     bool enabled_ = true;

@@ -4,6 +4,7 @@
 
 #include "widgets/listview/GenericListView.hpp"
 
+#include "common/UiPalette.hpp"
 #include "singletons/Theme.hpp"
 #include "widgets/listview/GenericListModel.hpp"
 
@@ -14,6 +15,7 @@ namespace chatterino {
 GenericListView::GenericListView()
     : itemDelegate_(this)
 {
+    this->setMouseTracking(true);
     this->setSelectionMode(QAbstractItemView::SingleSelection);
     this->setSelectionBehavior(QAbstractItemView::SelectItems);
     this->setItemDelegate(&this->itemDelegate_);
@@ -109,15 +111,17 @@ void GenericListView::refreshTheme(const Theme &theme)
 {
     const auto textCol = theme.window.text.name(QColor::HexArgb);
 
-    auto accentColor = theme.accent;
-    accentColor.setAlpha(100);
+    const auto &ui = uiPalette(theme.isLightTheme());
+    auto accentColor = ui.raised;
     const auto selCol = accentColor.name(QColor::HexArgb);
 
-    const auto listStyle = QStringLiteral(R"(
+    const auto listStyle =
+        QStringLiteral(R"(
         QListView {
             border: none;
             color: %1;
-            background: transparent;
+            background: %3;
+            padding: 4px;
             selection-background-color: %2;
         }
 
@@ -157,7 +161,7 @@ void GenericListView::refreshTheme(const Theme &theme)
             min-width: 8;
             height: 8;
         })")
-                               .arg(textCol, selCol);
+            .arg(textCol, selCol, ui.surface.name(QColor::HexArgb));
 
     this->setStyleSheet(listStyle);
 }

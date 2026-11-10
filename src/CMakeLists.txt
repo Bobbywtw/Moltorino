@@ -851,6 +851,9 @@ set(SOURCE_FILES
         util/SampleData.hpp
         util/SelfCheck.cpp
         util/SelfCheck.hpp
+        util/UiReview.cpp
+        util/UiReview.hpp
+        common/UiPalette.hpp
         util/SettingsTransfer.cpp
         util/SettingsTransfer.hpp
         util/SharedPtrElementLess.hpp

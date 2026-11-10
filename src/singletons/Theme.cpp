@@ -7,6 +7,7 @@
 #include "Application.hpp"
 #include "common/Literals.hpp"
 #include "common/QLogging.hpp"
+#include "common/UiPalette.hpp"
 #include "singletons/Paths.hpp"
 #include "singletons/Resources.hpp"
 #include "singletons/Settings.hpp"
@@ -299,6 +300,7 @@ std::optional<QJsonObject> loadTheme(const ThemeDescriptor &theme)
 namespace chatterino {
 
 const std::vector<ThemeDescriptor> Theme::builtInThemes{
+    {.key = "Glass", .path = ":/themes/Dark.json", .name = "Graphite"},
     {
         .key = "White",
         .path = ":/themes/White.json",
@@ -892,9 +894,54 @@ void Theme::parseFrom(const QJsonObject &root, bool isCustomTheme)
         this->customization.chatCornerRadius = 0;
     }
 
+    // Refresh chrome for every profile, including an existing saved layout.
+    // Never recolor usernames, badges, paints, links or semantic highlights.
+    const auto &ui = uiPalette(this->isLightTheme());
+    this->window.background = ui.canvas;
+    this->window.text = ui.text;
+    this->tabs.dividerLine = ui.border;
+    this->tabs.regular.backgrounds = {ui.canvas, ui.surface, ui.canvas};
+    this->tabs.regular.text = ui.muted;
+    this->tabs.selected.backgrounds = {ui.raised, ui.raised, ui.raised};
+    this->tabs.selected.text = ui.text;
+    this->tabs.selected.line = {ui.focus, ui.focus, ui.focus};
+    this->splits.header.background = ui.surface;
+    this->splits.header.focusedBackground = ui.surface;
+    this->splits.header.border = ui.border;
+    this->splits.header.focusedBorder = ui.focus;
+    this->splits.header.text = ui.muted;
+    this->splits.header.focusedText = ui.text;
+    this->splits.input.background = ui.surface;
+    this->splits.input.text = ui.text;
+    this->scrollbars.background = Qt::transparent;
+    this->scrollbars.thumb = ui.muted;
+    this->scrollbars.thumb.setAlpha(90);
+    this->scrollbars.thumbSelected = ui.muted;
+    this->scrollbars.thumbSelected.setAlpha(165);
+    if (!isCustomTheme && !this->isLightTheme())
+    {
+        this->splits.background = ui.canvas;
+        this->messages.backgrounds.regular = ui.canvas;
+        this->messages.backgrounds.alternate = QColor(24, 24, 27);
+        this->messages.textColors.regular = ui.text;
+        this->messages.textColors.system = ui.muted;
+        this->messages.textColors.timestamp = QColor(113, 113, 123);
+        this->messages.textColors.chatPlaceholder = ui.muted;
+        this->messages.selection = QColor(255, 255, 255, 40);
+        this->messages.disabled = QColor(20, 20, 22, 105);
+        this->splits.messageSeperator = QColor(255, 255, 255, 10);
+    }
+    this->customization.background = ui.canvas;
+    this->customization.surface = ui.surface;
+    this->customization.raisedSurface = ui.raised;
+    this->customization.text = ui.text;
+    this->customization.mutedText = ui.muted;
+
     this->splits.input.styleSheet = uR"(
         background: %1;
-        border: %2;
+        border: 1px solid %2;
+        border-radius: 5px;
+        padding: 5px 7px;
         color: %3;
         selection-background-color: %4;
     )"_s.arg(
@@ -934,7 +981,42 @@ void Theme::parseFrom(const QJsonObject &root, bool isCustomTheme)
         palette.setColor(QPalette::HighlightedText, Qt::white);
         palette.setColor(QPalette::PlaceholderText, {0x90, 0x90, 0x90});
     }
+    palette.setColor(QPalette::Window, ui.canvas);
+    palette.setColor(QPalette::WindowText, ui.text);
+    palette.setColor(QPalette::Base, ui.surface);
+    palette.setColor(QPalette::AlternateBase, ui.raised);
+    palette.setColor(QPalette::Text, ui.text);
+    palette.setColor(QPalette::Button, ui.surface);
+    palette.setColor(QPalette::ButtonText, ui.text);
+    palette.setColor(QPalette::Highlight, ui.raised.lighter(135));
+    palette.setColor(QPalette::HighlightedText, ui.text);
+    palette.setColor(QPalette::PlaceholderText, ui.muted);
+    palette.setColor(QPalette::ToolTipBase, ui.raised);
+    palette.setColor(QPalette::ToolTipText, ui.text);
+    palette.setColor(QPalette::Disabled, QPalette::Text, ui.muted);
+    palette.setColor(QPalette::Disabled, QPalette::ButtonText, ui.muted);
     this->palette = palette;
+    QApplication::setPalette(palette);
+    // Only standard Qt controls use QSS; chat chrome is painted by its widgets.
+    qApp->setStyleSheet(uR"(
+        QMenu { background: %1; color: %2; border: 1px solid %3;
+                padding: 4px; border-radius: 6px; }
+        QMenu::item { padding: 6px 26px 6px 12px; border-radius: 4px; }
+        QMenu::item:selected { background: %4; }
+        QMenu::item:disabled { color: %5; }
+        QMenu::separator { height: 1px; background: %3; margin: 4px 8px; }
+        QToolTip { background: %1; color: %2; border: 1px solid %3;
+                   padding: 5px 7px; border-radius: 5px; }
+        QScrollBar:vertical { width: 10px; background: transparent; margin: 2px; }
+        QScrollBar:horizontal { height: 10px; background: transparent; margin: 2px; }
+        QScrollBar::handle { background: %5; border-radius: 3px;
+                            min-height: 24px; min-width: 24px; }
+        QScrollBar::handle:hover { background: %2; }
+        QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+        QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+    )"_s.arg(ui.surface.name(QColor::HexArgb), ui.text.name(),
+             ui.border.name(QColor::HexArgb), ui.raised.name(),
+             ui.muted.name()));
 }
 
 bool Theme::isAutoReloading() const

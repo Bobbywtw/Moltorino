@@ -18,6 +18,7 @@
 #include "singletons/WindowManager.hpp"
 #include "util/CombinePath.hpp"
 #include "util/SelfCheck.hpp"
+#include "util/UiReview.hpp"
 #include "util/UnixSignalHandler.hpp"
 #include "widgets/dialogs/LastRunCrashDialog.hpp"
 
@@ -388,6 +389,10 @@ bool activateExistingGuiInstance(const Paths &paths)
 void runGui(QApplication &a, const Modes &modes, const Paths &paths,
             Settings &settings, const Args &args, Updates &updates)
 {
+    if (!qEnvironmentVariableIsEmpty("MOLTORINO_UI_REVIEW_DIR"))
+    {
+        settings.disableSave();
+    }
     initQt(args, settings);
     initResources();
     initSignalHandler();
@@ -438,6 +443,7 @@ void runGui(QApplication &a, const Modes &modes, const Paths &paths,
 
     Application app(settings, paths, args, updates);
     app.initialize(settings, modes, paths);
+    scheduleUiReview();
 
 #ifdef Q_OS_MACOS
     QObject macReopenContext;

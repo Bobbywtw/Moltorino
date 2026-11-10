@@ -88,8 +88,9 @@ float fontSize(FontStyle style)
         case FontStyle::ChatMedium:
         case FontStyle::ChatMediumBold:
         case FontStyle::ChatMediumItalic:
-        case FontStyle::TimestampMedium:
             return chatSize();
+        case FontStyle::TimestampMedium:
+            return 0.9F * chatSize();
         case FontStyle::ChatUsername:
             return getTheme()->customization.usernameFontSize > 0
                        ? static_cast<float>(

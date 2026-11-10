@@ -1631,6 +1631,7 @@ void EmotePopup::themeChangedEvent()
     BasePopup::themeChangedEvent();
 
     this->setPalette(getTheme()->palette);
+    this->search_->setStyleSheet(getTheme()->splits.input.styleSheet);
 }
 
 void EmotePopup::showEvent(QShowEvent *event)

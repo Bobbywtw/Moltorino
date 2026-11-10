@@ -2503,6 +2503,7 @@ void ChannelView::keyPressEvent(QKeyEvent *event)
 
 void ChannelView::performLayout(bool causedByScrollbar, bool disableAnimation)
 {
+    this->clearRowHover();
     // BenchmarkGuard benchmark("layout");
 
     const bool hadAnimatedRegion = !this->animationRegion_.isEmpty() ||
@@ -6011,6 +6012,7 @@ void ChannelView::drawMessages(QPainter &painter, const QRegion &area)
 
     QRegion animationRegion;
     QRegion selfTimedAnimationRegion;
+    const auto hoveredRow = this->hoveredRow_.lock();
     for (; ctx.messageIndex < messagesSnapshot.size(); ++ctx.messageIndex)
     {
         MessageLayout *layout = messagesSnapshot[ctx.messageIndex].get();
@@ -6028,6 +6030,7 @@ void ChannelView::drawMessages(QPainter &painter, const QRegion &area)
                                 layout->getHeight()};
         if (area.intersects(messageRect))
         {
+            ctx.rowHovered = hoveredRow.get() == layout;
             auto paintResult = layout->paint(ctx);
             const auto &message = layout->getMessagePtr();
             if (message != nullptr &&
@@ -6295,6 +6298,7 @@ void ChannelView::enterEvent(QEvent * /*event*/)
 
 void ChannelView::leaveEvent(QEvent * /*event*/)
 {
+    this->clearRowHover();
     this->hideTooltip();
     this->clearHoveredAnimation();
 
@@ -6369,6 +6373,36 @@ bool ChannelView::gestureEvent(const QGestureEvent *event)
     return false;
 }
 
+// Only two cached rows are invalidated when the pointer changes rows. No
+// animation, blur, timers, extra message objects or full-view repaint is used.
+void ChannelView::clearRowHover()
+{
+    if (auto row = this->hoveredRow_.lock())
+    {
+        row->invalidateBuffer();
+    }
+    this->hoveredRow_.reset();
+    if (!this->hoveredRowRect_.isEmpty())
+    {
+        this->update(this->hoveredRowRect_);
+        this->hoveredRowRect_ = {};
+    }
+}
+
+void ChannelView::setRowHover(const std::shared_ptr<MessageLayout> &layout,
+                              const QRect &rect)
+{
+    if (this->hoveredRow_.lock() == layout && this->hoveredRowRect_ == rect)
+    {
+        return;
+    }
+    this->clearRowHover();
+    this->hoveredRow_ = layout;
+    this->hoveredRowRect_ = rect;
+    layout->invalidateBuffer();
+    this->update(rect);
+}
+
 void ChannelView::mouseMoveEvent(QMouseEvent *event)
 {
     if (this->isPanning_)
@@ -6396,11 +6430,16 @@ void ChannelView::mouseMoveEvent(QMouseEvent *event)
     // no message under cursor
     if (!this->tryGetMessageAt(event->pos(), layout, relativePos, messageIndex))
     {
+        this->clearRowHover();
         this->clearHoveredAnimation();
         this->setCursor(Qt::ArrowCursor);
         this->hideTooltip();
         return;
     }
+
+    this->setRowHover(layout,
+                      QRect(0, qRound(event->position().y() - relativePos.y()),
+                            layout->getWidth(), layout->getHeight()));
 
     if (this->isScrolling_)
     {
@@ -7995,6 +8034,7 @@ void ChannelView::mouseDoubleClickEvent(QMouseEvent *event)
 
 void ChannelView::hideEvent(QHideEvent * /*event*/)
 {
+    this->clearRowHover();
     this->wallpaperPixmap_.reset();
     this->releaseVideoWallpaper();
     this->wallpaperCacheKey_.clear();

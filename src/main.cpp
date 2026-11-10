@@ -80,14 +80,24 @@ int main(int argc, char **argv)
     {
         QCoreApplication identityApp(argc, argv);
         const auto &version = Version::instance();
+        QCoreApplication::setApplicationName("chatterino");
+        QCoreApplication::setApplicationVersion(version.version());
+        QCoreApplication::setOrganizationDomain("chatterino.com");
+        const Modes runtimeModes;
+        const Paths runtimePaths(runtimeModes);
         QJsonObject identity{
             {"schemaVersion", 1},
             {"publicVersion", version.version()},
+            {"fullVersion", version.fullVersion()},
+            {"nightly", version.isNightly()},
+            {"portable", runtimeModes.isPortable},
+            {"settingsDirectory", runtimePaths.settingsDirectory},
             {"buildId", version.internalVersion()},
             {"channel", version.updateChannel()},
 #if defined(Q_OS_WIN)
             {"platform", "windows"},
-            {"appUserModelId", QString::fromStdWString(version.appUserModelID())},
+            {"appUserModelId",
+             QString::fromStdWString(version.appUserModelID())},
 #elif defined(Q_OS_MACOS)
             {"platform", "macos"},
 #elif defined(Q_OS_LINUX)
@@ -168,7 +178,11 @@ int main(int argc, char **argv)
     }
     ipc::initPaths(paths.get());
 
-    const Args args(a, *paths);
+    Args args(a, *paths);
+    if (!qEnvironmentVariableIsEmpty("MOLTORINO_UI_REVIEW_DIR"))
+    {
+        args.dontSaveSettings = true;
+    }
 
 #ifdef CHATTERINO_WITH_CRASHPAD
     const auto crashpadHandler = installCrashHandler(args, *paths);
@@ -185,12 +199,7 @@ int main(int argc, char **argv)
     {
         attachToConsole();
 
-        auto version = Version::instance();
-        auto versionMessage =
-            QString("%1 (commit %2%3)")
-                .arg(version.fullVersion())
-                .arg(version.commitHash())
-                .arg(version.isNightly() ? ", " + version.dateOfBuild() : "");
+        const auto versionMessage = Version::instance().fullVersion();
         std::cout << versionMessage.toLocal8Bit().constData() << '\n';
         std::cout.flush();
     }

@@ -14,10 +14,11 @@
 #include <QLineEdit>
 #include <QPaintEvent>
 #include <QPointer>
-#include <QPropertyAnimation>
 #include <QProgressBar>
+#include <QPropertyAnimation>
 #include <QTextEdit>
 #include <QTimer>
+#include <QVariantAnimation>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -360,6 +361,8 @@ protected:
     void setBackgroundColor(QColor newColor);
 
     QPropertyAnimation backgroundColorAnimation;
+    QVariantAnimation focusAnimation_;
+    qreal focusProgress_ = 0;
 
     std::optional<bool> checkSpellingOverride_;
     bool shouldCheckSpelling() const;

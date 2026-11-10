@@ -102,7 +102,7 @@ if(BUILD_BENCHMARKS)
 endif()
 
 project(chatterino
-    VERSION 15.5.1
+    VERSION 15.5.2
     DESCRIPTION "Moltorino chat client"
     HOMEPAGE_URL "https://moltorino.com/"
 )

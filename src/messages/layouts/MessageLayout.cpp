@@ -419,6 +419,12 @@ MessagePaintResult MessageLayout::paint(const MessagePaintContext &ctx)
 
     if (this->message_->flags.has(MessageFlag::Disabled))
     {
+        auto marker = ctx.messageColors.systemText;
+        marker.setAlpha(100);
+        ctx.painter.fillRect(
+            QRectF(4 * this->scale_, ctx.y + 5 * this->scale_, this->scale_,
+                   std::max<qreal>(0, this->height_ - 10 * this->scale_)),
+            marker);
         ctx.painter.fillRect(
             QRect{
                 0,
@@ -718,6 +724,50 @@ void MessageLayout::updateBuffer(QPixmap *buffer,
     }
 
     painter.fillRect(buffer->rect(), backgroundColor);
+    if (ctx.rowHovered)
+    {
+        painter.fillRect(buffer->rect(),
+                         ctx.messageColors.regularText.lightness() > 128
+                             ? QColor(255, 255, 255, 6)
+                             : QColor(0, 0, 0, 5));
+    }
+    if (ctx.preferences.showHighlights)
+    {
+        QColor marker;
+        if (!this->flags.has(MessageLayoutFlag::IgnoreHighlights) &&
+            this->message_->flags.hasAny(
+                {MessageFlag::Highlighted, MessageFlag::HighlightedWhisper}) &&
+            this->message_->highlightColor)
+        {
+            marker = *this->message_->highlightColor;
+        }
+        else if (ctx.preferences.enableSubHighlight &&
+                 this->message_->flags.hasAny(
+                     {MessageFlag::Subscription,
+                      MessageFlag::UncategorizedNotification}))
+        {
+            marker = *ctx.colorProvider.color(ColorType::Subscription);
+        }
+        if (marker.isValid())
+        {
+            marker.setAlpha(175);
+            painter.fillRect(
+                QRectF(0, 3 * this->scale_, 2 * this->scale_,
+                       std::max<qreal>(0, this->height_ - 6 * this->scale_)),
+                marker);
+        }
+    }
+    if (this->message_->flags.has(MessageFlag::ReplyMessage) &&
+        !getSettings()->hideReplyContext)
+    {
+        auto connector = ctx.messageColors.systemText;
+        connector.setAlpha(85);
+        painter.fillRect(
+            QRectF(
+                5 * this->scale_, 6 * this->scale_, this->scale_,
+                std::max<qreal>(0, this->firstLineHeight_ - 4 * this->scale_)),
+            connector);
+    }
     if (ctx.preferences.showHighlights && this->message_->autoModReview)
     {
         const bool selected =

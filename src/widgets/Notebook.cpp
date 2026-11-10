@@ -3059,14 +3059,17 @@ void Notebook::setTabLocation(NotebookTabLocation location)
 
 void Notebook::paintEvent(QPaintEvent *event)
 {
+    (void)event;
     auto scale = this->scale();
 
     QPainter painter(this);
+    painter.fillRect(this->rect(), this->theme->window.background);
     if (this->tabLocation_ == NotebookTabLocation::Top ||
         this->tabLocation_ == NotebookTabLocation::Bottom)
     {
         /// horizontal line
-        painter.fillRect(0, this->lineOffset_, this->width(), int(2 * scale),
+        painter.fillRect(0, this->lineOffset_, this->width(),
+                         std::max(1, int(scale)),
                          this->theme->tabs.dividerLine);
     }
     else if (this->tabLocation_ == NotebookTabLocation::Left ||
@@ -3077,21 +3080,21 @@ void Notebook::paintEvent(QPaintEvent *event)
             if (this->tabLocation_ == NotebookTabLocation::Left)
             {
                 painter.fillRect(0, int(NOTEBOOK_TAB_HEIGHT * scale),
-                                 this->lineOffset_, int(2 * scale),
+                                 this->lineOffset_, std::max(1, int(scale)),
                                  this->theme->tabs.dividerLine);
             }
             else
             {
-                painter.fillRect(this->lineOffset_,
-                                 int(NOTEBOOK_TAB_HEIGHT * scale),
-                                 this->width() - this->lineOffset_,
-                                 int(2 * scale), this->theme->tabs.dividerLine);
+                painter.fillRect(
+                    this->lineOffset_, int(NOTEBOOK_TAB_HEIGHT * scale),
+                    this->width() - this->lineOffset_, std::max(1, int(scale)),
+                    this->theme->tabs.dividerLine);
             }
         }
 
         /// vertical line
-        painter.fillRect(this->lineOffset_, 0, int(2 * scale), this->height(),
-                         this->theme->tabs.dividerLine);
+        painter.fillRect(this->lineOffset_, 0, std::max(1, int(scale)),
+                         this->height(), this->theme->tabs.dividerLine);
     }
 }
 

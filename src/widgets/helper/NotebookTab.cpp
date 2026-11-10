@@ -8,6 +8,7 @@
 #include "common/Channel.hpp"
 #include "common/Common.hpp"
 #include "common/QLogging.hpp"
+#include "common/UiPalette.hpp"
 #include "controllers/hotkeys/HotkeyCategory.hpp"
 #include "controllers/hotkeys/HotkeyController.hpp"
 #include "controllers/recording/ChatRecordingController.hpp"
@@ -310,11 +311,19 @@ NotebookTab::NotebookTab(Notebook *notebook, Role role)
     , role_(role)
     , menu_(this)
 {
+    this->selectionAnimation_.setDuration(140);
+    this->selectionAnimation_.setEasingCurve(QEasingCurve::OutCubic);
+    QObject::connect(&this->selectionAnimation_,
+                     &QVariantAnimation::valueChanged, this,
+                     [this](const QVariant &value) {
+                         this->selectionProgress_ = value.toReal();
+                         this->update();
+                     });
     this->setContentCacheEnabled(false);
     this->setAcceptDrops(true);
 
     this->positionChangedAnimation_.setEasingCurve(
-        QEasingCurve(QEasingCurve::InCubic));
+        QEasingCurve(QEasingCurve::OutCubic));
 
     getSettings()->showTabCloseButton.connect(
         [this] {
@@ -1352,6 +1361,13 @@ void NotebookTab::copyHighlightStateAndSourcesFrom(const NotebookTab *sourceTab)
 
 void NotebookTab::setSelected(bool value)
 {
+    if (this->selected_ != value)
+    {
+        this->selectionAnimation_.stop();
+        this->selectionAnimation_.setStartValue(this->selectionProgress_);
+        this->selectionAnimation_.setEndValue(value ? 1.0 : 0.0);
+        this->selectionAnimation_.start();
+    }
     this->selected_ = value;
 
     if (value)
@@ -1602,7 +1618,7 @@ void NotebookTab::moveAnimated(QPoint targetPos, bool animated)
     }
 
     this->positionChangedAnimation_.stop();
-    this->positionChangedAnimation_.setDuration(75);
+    this->positionChangedAnimation_.setDuration(120);
     this->positionChangedAnimation_.setStartValue(this->pos());
     this->positionChangedAnimation_.setEndValue(targetPos);
     this->positionChangedAnimation_.start();
@@ -1641,12 +1657,16 @@ void NotebookTab::paintEvent(QPaintEvent *)
 
     bool windowFocused = this->window() == QApplication::activeWindow();
 
-    QBrush tabBackground = /*this->mouseOver_ ? colors.backgrounds.hover
-                                 :*/
-        (windowFocused ? colors.backgrounds.regular
-                       : colors.backgrounds.unfocused);
-
-    auto selectionOffset = ceil((this->selected_ ? 0.f : 1.f) * scale);
+    const auto &ui = uiPalette(this->theme->isLightTheme());
+    const auto selectedSurface =
+        uiMix(ui.canvas, ui.raised, this->selectionProgress_);
+    QBrush tabBackground(
+        uiMix(selectedSurface, ui.raised, this->hoverProgress() * 0.55));
+    if (this->selected_ || this->highlightState_ != HighlightState::None)
+    {
+        colors.text = ui.text;
+    }
+    const qreal selectionOffset = 0;
 
     // fill the tab background
     auto bgRect = this->rect();
@@ -1668,12 +1688,12 @@ void NotebookTab::paintEvent(QPaintEvent *)
 
     const auto &appearance = this->theme->customization;
     const auto tabRadius =
-        std::min(appearance.tabCornerRadius * scale, 10.0F * scale);
+        std::min(appearance.tabCornerRadius * scale, 5.0F * scale);
     const bool individual = appearance.tabShape == ThemeTabShape::Individual;
     auto shapedRect = QRectF(bgRect);
     if (individual)
     {
-        const auto gap = appearance.tabSpacing * scale;
+        const auto gap = std::min(appearance.tabSpacing, 4) * scale;
         if (this->tabLocation_ == NotebookTabLocation::Top ||
             this->tabLocation_ == NotebookTabLocation::Bottom)
         {
@@ -1744,8 +1764,10 @@ void NotebookTab::paintEvent(QPaintEvent *)
     switch (this->tabLocation_)
     {
         case NotebookTabLocation::Top:
-            lineRect =
-                QRect(bgRect.left(), bgRect.y(), bgRect.width(), lineThickness);
+            lineRect = QRect(bgRect.left() + int(6 * scale),
+                             bgRect.bottom() - int(lineThickness) + 1,
+                             std::max(0, bgRect.width() - int(12 * scale)),
+                             int(lineThickness));
             break;
         case NotebookTabLocation::Left:
             lineRect =
@@ -1763,7 +1785,10 @@ void NotebookTab::paintEvent(QPaintEvent *)
 
     painter.save();
     painter.setClipPath(backgroundPath);
-    painter.fillRect(lineRect, lineColor);
+    if (this->selected_ || this->highlightState_ != HighlightState::None)
+    {
+        painter.fillRect(lineRect, lineColor);
+    }
     painter.restore();
 
     const auto groupGeometry = groupHeaderGeometry(scale);
@@ -1808,7 +1833,7 @@ void NotebookTab::paintEvent(QPaintEvent *)
     QRect rect(0, 0, this->width() - rectW, height);
 
     // draw text
-    int offset = int(scale * 4 / compactDivider);
+    int offset = int(scale * 8 / compactDivider);
     QRect textRect(offset, 0, this->width() - offset - offset, height);
     if (this->role_ == Role::Page)
     {
@@ -1835,7 +1860,7 @@ void NotebookTab::paintEvent(QPaintEvent *)
     const auto textPositionOffset =
         this->role_ == Role::GroupHeader
             ? -std::clamp(static_cast<int>(std::round(scale)) + 1, 1, 3)
-            : (this->selected_ ? -1 : -2);
+            : 0;
     translateRectForLocation(textRect, this->tabLocation_, textPositionOffset);
 
     if (this->reservesXButtonSpace() && (this->mouseOver_ || this->selected_))
@@ -1939,7 +1964,7 @@ void NotebookTab::paintEvent(QPaintEvent *)
     // draw close x
     if (this->shouldDrawXButton())
     {
-        painter.setRenderHint(QPainter::Antialiasing, false);
+        painter.setRenderHint(QPainter::Antialiasing, true);
 
         QRect xRect = this->getXRect();
         if (!xRect.isNull())
@@ -1948,15 +1973,24 @@ void NotebookTab::paintEvent(QPaintEvent *)
 
             if (this->mouseOverX_)
             {
-                painter.fillRect(xRect, QColor(0, 0, 0, 64));
+                painter.save();
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(
+                    QColor(128, 128, 140, this->mouseDownX_ ? 42 : 24));
+                painter.drawRoundedRect(xRect.adjusted(1, 1, -1, -1), 4 * scale,
+                                        4 * scale);
+                painter.restore();
 
                 if (this->mouseDownX_)
                 {
-                    painter.fillRect(xRect, QColor(0, 0, 0, 64));
+                    painter.setPen(ui.text);
                 }
             }
 
-            int a = static_cast<int>(scale * 4);
+            painter.setPen(QPen(this->mouseOverX_ ? ui.text : ui.muted,
+                                std::max(1.0F, 1.2F * scale), Qt::SolidLine,
+                                Qt::RoundCap));
+            int a = static_cast<int>(scale * 5);
 
             painter.drawLine(xRect.topLeft() + QPoint(a, a),
                              xRect.bottomRight() + QPoint(-a, -a));
@@ -1965,11 +1999,6 @@ void NotebookTab::paintEvent(QPaintEvent *)
         }
     }
 
-    // draw mouse over effect
-    if (!this->selected_)
-    {
-        this->fancyPaint(painter);
-    }
 
     // draw line at border
     if (!this->selected_ && this->isInLastRow_)

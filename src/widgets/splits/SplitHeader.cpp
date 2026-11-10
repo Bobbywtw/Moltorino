@@ -8,6 +8,7 @@
 #include "common/network/NetworkCommon.hpp"
 #include "common/network/NetworkRequest.hpp"
 #include "common/network/NetworkResult.hpp"
+#include "common/UiPalette.hpp"
 #include "controllers/accounts/AccountController.hpp"
 #include "controllers/chat/ChatAutomationController.hpp"
 #include "controllers/commands/builtin/Misc.hpp"
@@ -81,7 +82,7 @@ constexpr const int BUTTON_WIDTH = 28;
 /// The width of the "Add split" button.
 ///
 /// This matches the scrollbar's full width.
-constexpr const int ADD_SPLIT_BUTTON_WIDTH = 16;
+constexpr const int ADD_SPLIT_BUTTON_WIDTH = 24;
 
 // 5 minutes
 constexpr const qint64 THUMBNAIL_MAX_AGE_MS = 5LL * 60 * 1000;
@@ -864,8 +865,8 @@ void SplitHeader::initializeLayout()
         },
         this->managedConnections_);
 
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
+    layout->setContentsMargins(3, 0, 3, 1);
+    layout->setSpacing(1);
     this->autoModHeaderBalance_ =
         new QSpacerItem(0, 0, QSizePolicy::Preferred, QSizePolicy::Minimum);
     layout->insertSpacerItem(layout->indexOf(this->titleLabel_),
@@ -2395,31 +2396,19 @@ void SplitHeader::updateIcons()
     }
 }
 
-void SplitHeader::paintEvent(QPaintEvent * /*event*/)
+void SplitHeader::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
-
-    const bool polished =
-        !themeUsesClassicSplitFrame(this->theme->customization.foundation);
-    QColor background = this->theme->splits.header.background;
-    QColor border = this->theme->splits.header.border;
-    const bool focused = this->split_->hasFocus();
-
-    if (focused && !polished)
+    const auto &ui = uiPalette(this->theme->isLightTheme());
+    painter.fillRect(this->rect(), ui.surface);
+    painter.fillRect(0, this->height() - 1, this->width(), 1, ui.border);
+    if (this->split_->hasFocus())
     {
-        background = this->theme->splits.header.focusedBackground;
-        border = this->theme->splits.header.focusedBorder;
+        painter.fillRect(
+            QRectF(0, 7 * this->scale(), 2 * this->scale(),
+                   std::max<qreal>(0, this->height() - 14 * this->scale())),
+            ui.focus);
     }
-
-    painter.fillRect(this->rect(), background);
-    if (polished)
-    {
-        return;
-    }
-
-    painter.setPen(border);
-    painter.drawRect(0, 0, this->width() - 1, this->height() - 2);
-    painter.fillRect(0, this->height() - 1, this->width(), 1, background);
 }
 
 void SplitHeader::mousePressEvent(QMouseEvent *event)
@@ -2542,19 +2531,7 @@ void SplitHeader::themeChangedEvent()
     }
     this->titleLabel_->setPalette(palette);
 
-    if (this->theme->customization.foundation ==
-        ThemeFoundation::MoltorinoPolished)
-    {
-        this->addButton_->setOptions({});
-    }
-    else
-    {
-        auto bg = this->theme->splits.header.background;
-        this->addButton_->setOptions({
-            .background = bg,
-            .backgroundHover = bg,
-        });
-    }
+    this->addButton_->setOptions({});
 
     this->update();
 }

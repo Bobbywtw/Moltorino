@@ -117,6 +117,7 @@ struct MessagePaintContext {
 
     const MessageLayoutElement *hoveredElement = nullptr;
     bool hoverAnimateOnly = false;
+    bool rowHovered = false;
 };
 
 struct MessageLayoutContext {

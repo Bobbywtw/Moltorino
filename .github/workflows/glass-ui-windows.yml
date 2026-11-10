@@ -13,16 +13,15 @@ jobs:
   build-windows:
     name: Build Glass UI - Windows x64
     runs-on: windows-2022
+    env:
+      SCCACHE_DIR: ${{ github.workspace }}\.sccache
+      SCCACHE_CACHE_SIZE: 2G
 
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: recursive
           fetch-depth: 0
-
-      - name: Apply Glass UI pass
-        shell: bash
-        run: git apply --check .github/patches/glass-ui-pass-01.patch && git apply .github/patches/glass-ui-pass-01.patch
 
       - name: Install Qt 6
         uses: jurplel/install-qt-action@v4.3.1
@@ -37,12 +36,19 @@ jobs:
         with:
           arch: x64
 
+      - name: Prepare persistent sccache directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path $env:SCCACHE_DIR -Force | Out-Null
+          Write-Output "SCCACHE_DIR=$env:SCCACHE_DIR"
+
       - name: Setup sccache
+        id: sccache
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           variant: sccache
           save: true
-          key: sccache-glass-windows2022-x64-6.9.3
+          key: sccache-graphite-windows2022-x64-6.9.3-no-pch-v1
 
       - name: Cache Conan packages
         id: conan-cache
@@ -108,11 +114,12 @@ jobs:
         shell: pwsh
         run: |
           cd build
+          # MSVC /Fp and /Yc are not cacheable; compile without PCH for sccache.
           cmake `
               -G Ninja `
               -DCMAKE_BUILD_TYPE=RelWithDebInfo `
               -DCMAKE_TOOLCHAIN_FILE="conan_toolchain.cmake" `
-              -DUSE_PRECOMPILED_HEADERS=ON `
+              -DUSE_PRECOMPILED_HEADERS=Off `
               -DBUILD_WITH_CRASHPAD=Off `
               -DCHATTERINO_LTO=On `
               -DFORCE_JSON_GENERATION=Off `
@@ -121,6 +128,22 @@ jobs:
               -DMOLTORINO_VELOPACK=Off `
               ..
           cmake --build . --parallel 4
+
+      - name: Verify compiler cache data
+        if: always() && steps.sccache.outcome == 'success'
+        shell: pwsh
+        run: |
+          Write-Output "SCCACHE_DIR=$env:SCCACHE_DIR"
+          sccache --show-stats
+          if (!(Test-Path -Path $env:SCCACHE_DIR -PathType Container)) {
+            throw "sccache directory disappeared before post-job save"
+          }
+          $files = @(Get-ChildItem $env:SCCACHE_DIR -File -Recurse)
+          $bytes = ($files | Measure-Object -Property Length -Sum).Sum
+          Write-Output "sccache disk entries=$($files.Count), bytes=$bytes"
+          if ($files.Count -eq 0 -or $bytes -eq 0) {
+            throw "No compiler cache data was written to SCCACHE_DIR"
+          }
 
       - name: Prepare Windows ZIP build
         working-directory: build
@@ -173,10 +196,20 @@ jobs:
             if ($process.ExitCode -ne 0) { throw "Portable launch failed: $($program[0]) ($($process.ExitCode))" }
           }
           Pop-Location
+          ..\.CI\verify-glass-ui.ps1 -PackageDirectory $packageDir -ReviewDirectory (Join-Path $env:GITHUB_WORKSPACE 'build/ui-review')
+
+      - name: Upload native UI review
+        uses: actions/upload-artifact@v7
+        with:
+          name: Moltorino-UI-Review
+          path: build/ui-review/
+          overwrite: true
+          retention-days: 14
 
       - name: Upload Glass UI Windows build
         uses: actions/upload-artifact@v7
         with:
           name: Moltorino-Windows
+          overwrite: true
           path: build/Moltorino-Windows.zip
           retention-days: 14

@@ -188,6 +188,8 @@ private:
     void recreateCloseMultipleTabsMenu(NotebookTabLocation tabLocation);
 
     QPropertyAnimation positionChangedAnimation_;
+    QVariantAnimation selectionAnimation_;
+    qreal selectionProgress_ = 0;
     QPoint positionAnimationDesiredPoint_;
 
     Notebook *notebook_;

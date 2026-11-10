@@ -4,6 +4,7 @@
 
 #include "widgets/buttons/Button.hpp"
 
+#include "common/UiPalette.hpp"
 #include "singletons/Theme.hpp"
 #include "util/FunctionEventFilter.hpp"
 
@@ -13,17 +14,20 @@
 #include <QPainter>
 #include <QPointer>
 #include <QScreen>
+#include <QTimer>
 
 namespace chatterino {
 
 Button::Button(BaseWidget *parent)
     : BaseWidget(parent)
 {
-    connect(&this->effectTimer_, &QTimer::timeout, this,
-            &Button::onMouseEffectTimeout);
-
-    this->effectTimer_.setInterval(20);
-
+    this->hoverAnimation_.setEasingCurve(QEasingCurve::OutCubic);
+    QObject::connect(&this->hoverAnimation_, &QVariantAnimation::valueChanged,
+                     this, [this](const QVariant &value) {
+                         this->hoverMultiplier_ = value.toReal();
+                         this->update();
+                     });
+    this->setCursor(Qt::PointingHandCursor);
     this->setMouseTracking(true);
 }
 
@@ -35,8 +39,9 @@ bool Button::enabled() const noexcept
 void Button::setEnabled(bool enabled)
 {
     this->enabled_ = enabled;
-
-    this->update();
+    this->setCursor(enabled ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    this->animateHover(this->mouseOver_);
+    this->invalidateContent();
 }
 
 bool Button::mouseOver() const noexcept
@@ -189,7 +194,7 @@ void Button::enterEvent(QEvent * )
     if (!this->mouseOver_)
     {
         this->mouseOver_ = true;
-        this->effectTimer_.start();
+        this->animateHover(this->mouseOver_);
         this->update();
         this->mouseOverUpdated();
     }
@@ -200,7 +205,7 @@ void Button::leaveEvent(QEvent * )
     if (this->mouseOver_)
     {
         this->mouseOver_ = false;
-        this->effectTimer_.start();
+        this->animateHover(this->mouseOver_);
         this->update();
         this->mouseOverUpdated();
     }
@@ -303,67 +308,18 @@ void Button::mouseMoveEvent(QMouseEvent *event)
     }
 }
 
-void Button::addClickEffect(QPoint position)
+void Button::addClickEffect(QPoint)
 {
-    this->clickEffects_.emplace_back(position);
-    this->effectTimer_.start();
+    this->update();
 }
 
-void Button::onMouseEffectTimeout()
+void Button::animateHover(bool hovered)
 {
-    bool performUpdate = false;
-
-    if (this->mouseOver_)
-    {
-        if (this->hoverMultiplier_ != 1)
-        {
-            this->hoverMultiplier_ =
-                std::min(1.0, this->hoverMultiplier_ + 0.5);
-            performUpdate = true;
-        }
-    }
-    else
-    {
-        if (this->hoverMultiplier_ != 0)
-        {
-            this->hoverMultiplier_ =
-                std::max(0.0, this->hoverMultiplier_ - 0.3);
-            performUpdate = true;
-        }
-    }
-
-    if (!this->clickEffects_.empty())
-    {
-        performUpdate = true;
-
-        for (auto it = this->clickEffects_.begin();
-             it != this->clickEffects_.end();)
-        {
-            it->progress += this->leftMouseButtonDown_ ? 0.02 : 0.07;
-
-            if (it->progress >= 1.0)
-            {
-                it = this->clickEffects_.erase(it);
-            }
-            else
-            {
-                it++;
-            }
-        }
-    }
-
-    if (performUpdate)
-    {
-        this->update();
-    }
-
-    const bool hoverAnimationFinished =
-        (this->mouseOver_ && this->hoverMultiplier_ == 1) ||
-        (!this->mouseOver_ && this->hoverMultiplier_ == 0);
-    if (hoverAnimationFinished && this->clickEffects_.empty())
-    {
-        this->effectTimer_.stop();
-    }
+    this->hoverAnimation_.stop();
+    this->hoverAnimation_.setDuration(hovered ? 140 : 160);
+    this->hoverAnimation_.setStartValue(this->hoverMultiplier_);
+    this->hoverAnimation_.setEndValue(hovered && this->enabled_ ? 1.0 : 0.0);
+    this->hoverAnimation_.start();
 }
 
 void Button::showMenu()
@@ -396,6 +352,12 @@ void Button::showMenu()
 
 void Button::paintButton(QPainter &painter)
 {
+    painter.save();
+    if (!this->enabled_ || !this->isEnabled())
+    {
+        painter.setOpacity(0.4);
+    }
+    this->fancyPaint(painter);
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
 
     if (this->cachePixmap_)
@@ -435,58 +397,40 @@ void Button::paintButton(QPainter &painter)
         this->paintContent(painter);
     }
 
-    this->fancyPaint(painter);
-
     if (this->borderColor_.isValid())
     {
         painter.setRenderHint(QPainter::Antialiasing, false);
         painter.setPen(this->borderColor_);
         painter.drawRect(0, 0, this->width() - 1, this->height() - 1);
     }
+    painter.restore();
 }
 
 void Button::fancyPaint(QPainter &painter)
 {
-    if (!this->enabled_)
+    if (!this->enabled_ || !this->isEnabled())
     {
         return;
     }
-
+    const auto pressed = this->leftMouseButtonDown_ || this->menuVisible_;
+    const auto amount = pressed ? 1.0 : this->hoverMultiplier_;
+    if (amount <= 0)
+    {
+        return;
+    }
+    auto color = this->mouseEffectColor_.value_or(
+        this->theme->isLightTheme() ? QColor(0, 0, 0) : QColor(255, 255, 255));
+    color.setAlphaF((pressed ? 0.12 : 0.065) * amount);
+    painter.save();
     painter.setRenderHint(QPainter::Antialiasing);
-    QColor c;
-
-    if (this->mouseEffectColor_)
-    {
-        c = *this->mouseEffectColor_;
-    }
-    else
-    {
-        c = this->theme->isLightTheme() ? QColor(0, 0, 0)
-                                        : QColor(255, 255, 255);
-    }
-
-    if (this->hoverMultiplier_ > 0)
-    {
-        QRadialGradient gradient(QPointF(this->mousePos_),
-                                 static_cast<qreal>(this->width()) / 2.0);
-
-        gradient.setColorAt(0, QColor(c.red(), c.green(), c.blue(),
-                                      int(50 * this->hoverMultiplier_)));
-        gradient.setColorAt(1, QColor(c.red(), c.green(), c.blue(),
-                                      int(40 * this->hoverMultiplier_)));
-
-        painter.fillRect(this->rect(), gradient);
-    }
-
-    for (auto effect : this->clickEffects_)
-    {
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor(c.red(), c.green(), c.blue(),
-                                int((1 - effect.progress) * 95)));
-        painter.drawEllipse(QPointF(effect.position),
-                            effect.progress * qreal(this->width()) * 2,
-                            effect.progress * qreal(this->width()) * 2);
-    }
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(color);
+    const qreal inset = std::max<qreal>(1, this->scale());
+    const qreal radius = 5 * this->scale();
+    painter.drawRoundedRect(
+        QRectF(this->rect()).adjusted(inset, inset, -inset, -inset), radius,
+        radius);
+    painter.restore();
 }
 
 }

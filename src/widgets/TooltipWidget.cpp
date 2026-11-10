@@ -5,8 +5,10 @@
 #include "widgets/TooltipWidget.hpp"
 
 #include "Application.hpp"
+#include "common/UiPalette.hpp"
 #include "messages/Image.hpp"
 #include "singletons/Fonts.hpp"
+#include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
 
 #include <QPainter>
@@ -70,7 +72,9 @@ TooltipWidget::TooltipWidget(BaseWidget *parent)
     assert(parent != nullptr);
     QObject::connect(parent, &QObject::destroyed, this, &QObject::deleteLater);
 
-    this->setStyleSheet("color: #fff; background: rgba(11, 11, 11, 0.8)");
+    this->setStyleSheet(
+        QStringLiteral("QLabel { color: %1; background: transparent; }")
+            .arg(uiPalette(getTheme()->isLightTheme()).text.name()));
     this->setAttribute(Qt::WA_TranslucentBackground);
     this->setAttribute(Qt::WA_TransparentForMouseEvents);
     this->setWindowFlag(Qt::WindowStaysOnTopHint, true);
@@ -320,7 +324,12 @@ void TooltipWidget::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
 
-    painter.fillRect(this->rect(), QColor(0, 0, 0, int(0.8 * 255)));
+    const auto &ui = uiPalette(getTheme()->isLightTheme());
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(QPen(ui.border, 1));
+    painter.setBrush(ui.surface);
+    painter.drawRoundedRect(QRectF(this->rect()).adjusted(0.5, 0.5, -0.5, -0.5),
+                            6, 6);
 }
 
 void TooltipWidget::scaleChangedEvent(float)

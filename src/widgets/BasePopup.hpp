@@ -7,6 +7,8 @@
 #include "common/FlagsEnum.hpp"
 #include "widgets/BaseWindow.hpp"
 
+#include <QPropertyAnimation>
+
 class QDialogButtonBox;
 
 namespace chatterino {
@@ -23,6 +25,11 @@ protected:
     bool handleEscape(QKeyEvent *e, QDialogButtonBox *buttonBox);
 
     bool handleEnter(QKeyEvent *e, QDialogButtonBox *buttonBox);
+
+    void showEvent(QShowEvent *event) override;
+
+private:
+    QPropertyAnimation openingAnimation_;
 };
 
 }

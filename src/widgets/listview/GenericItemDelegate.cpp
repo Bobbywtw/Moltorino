@@ -27,12 +27,19 @@ void SwitcherItemDelegate::paint(QPainter *painter,
 
     if (item)
     {
-        if (option.state & QStyle::State_Selected)
+        painter->save();
+        if (option.state & (QStyle::State_Selected | QStyle::State_MouseOver))
         {
-            painter->fillRect(option.rect, option.palette.highlight());
+            painter->setRenderHint(QPainter::Antialiasing);
+            painter->setPen(Qt::NoPen);
+            auto color = option.palette.highlight().color();
+            color.setAlpha(option.state & QStyle::State_Selected ? 255 : 110);
+            painter->setBrush(color);
+            painter->drawRoundedRect(option.rect.adjusted(3, 1, -3, -1), 4, 4);
         }
-
+        painter->setPen(option.palette.text().color());
         item->paint(painter, option.rect);
+        painter->restore();
     }
     else
     {

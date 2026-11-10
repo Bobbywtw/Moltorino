@@ -20,14 +20,14 @@ struct SettingsTheme {
 inline const SettingsTheme &settingsTheme()
 {
     static const SettingsTheme value{
-        .background = QColor(QStringLiteral("#0f0e0d")),
-        .surface = QColor(QStringLiteral("#191817")),
-        .raisedSurface = QColor(QStringLiteral("#22211f")),
-        .text = QColor(QStringLiteral("#e8e7e4")),
-        .mutedText = QColor(QStringLiteral("#9c9b97")),
-        .accent = QColor(QStringLiteral("#f3922b")),
-        .selectionSurface = QColor(QStringLiteral("#2f261c")),
-        .interfaceFontFamily = QStringLiteral("Gabarito"),
+        .background = QColor(QStringLiteral("#141416")),
+        .surface = QColor(QStringLiteral("#1e1e21")),
+        .raisedSurface = QColor(QStringLiteral("#28282c")),
+        .text = QColor(QStringLiteral("#ebebef")),
+        .mutedText = QColor(QStringLiteral("#96969f")),
+        .accent = QColor(QStringLiteral("#b1b1bc")),
+        .selectionSurface = QColor(QStringLiteral("#303034")),
+        .interfaceFontFamily = QStringLiteral("Segoe UI"),
         .interfaceFontSize = 10,
     };
     return value;

@@ -90,7 +90,10 @@ void DrawnButton::paintContent(QPainter &painter)
 
     if (bg.isValid())
     {
-        painter.fillRect(this->rect(), bg);
+        QPainterPath background;
+        background.addRoundedRect(QRectF(this->rect()).adjusted(1, 1, -1, -1),
+                                  4 * this->scale(), 4 * this->scale());
+        painter.fillPath(background, bg);
     }
 
     auto thickness = this->getThickness();

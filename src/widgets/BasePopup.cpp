@@ -12,7 +12,19 @@ namespace chatterino {
 
 BasePopup::BasePopup(FlagsEnum<Flags> _flags, QWidget *parent)
     : BaseWindow(_flags | Dialog, parent)
+    , openingAnimation_(this, "windowOpacity")
 {
+    this->openingAnimation_.setDuration(110);
+    this->openingAnimation_.setEasingCurve(QEasingCurve::OutCubic);
+}
+
+void BasePopup::showEvent(QShowEvent *event)
+{
+    BaseWindow::showEvent(event);
+    this->openingAnimation_.stop();
+    this->openingAnimation_.setStartValue(0.96);
+    this->openingAnimation_.setEndValue(1.0);
+    this->openingAnimation_.start();
 }
 
 void BasePopup::keyPressEvent(QKeyEvent *e)

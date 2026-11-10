@@ -11,6 +11,7 @@
 #include <pajlada/signals/signal.hpp>
 #include <pajlada/signals/signalholder.hpp>
 #include <QPropertyAnimation>
+#include <QVariantAnimation>
 #include <QWidget>
 
 namespace chatterino {
@@ -108,6 +109,8 @@ private:
     MouseLocation locationOfMouseEvent(QMouseEvent *event) const;
 
     QPropertyAnimation currentValueAnimation_;
+    QVariantAnimation hoverAnimation_;
+    qreal hoverProgress_ = 0;
 
     const size_t highlightsLimit_;
     boost::circular_buffer<ScrollbarHighlight> highlights_;

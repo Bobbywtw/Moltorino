@@ -116,8 +116,9 @@ bool InputCompletionPopup::hasResults() const
     return this->model_.rowCount() > 0;
 }
 
-void InputCompletionPopup::showEvent(QShowEvent * )
+void InputCompletionPopup::showEvent(QShowEvent *event)
 {
+    BasePopup::showEvent(event);
     this->redrawTimer_.start();
 }
 

@@ -8,6 +8,7 @@
 #include "common/Channel.hpp"
 #include "common/enums/MessageOverflow.hpp"
 #include "common/QLogging.hpp"
+#include "common/UiPalette.hpp"
 #include "controllers/accounts/AccountController.hpp"
 #include "controllers/commands/builtin/twitch/Nuke.hpp"
 #include "controllers/commands/CommandController.hpp"
@@ -24,19 +25,19 @@
 #include "providers/potat/PotatCommands.hpp"
 #include "providers/tiktok/TikTokText.hpp"
 #include "providers/tiktok/TikTokTypes.hpp"
+#include "providers/translation/Translator.hpp"
 #include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "providers/twitch/TwitchCommon.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
-#include "providers/translation/Translator.hpp"
 #include "providers/youtube/YouTubeTypes.hpp"
 #include "singletons/Fonts.hpp"
 #include "singletons/ImageUploader.hpp"
-#include "singletons/UrlShortener.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/ThemeCustomization.hpp"
+#include "singletons/UrlShortener.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/Helpers.hpp"
 #include "util/LayoutCreator.hpp"
@@ -69,12 +70,13 @@
 #include <QHideEvent>
 #include <QKeyEvent>
 #include <QMenu>
-#include <QMouseEvent>
 #include <QMessageBox>
+#include <QMouseEvent>
 #include <QPainter>
-#include <QPushButton>
+#include <QPainterPath>
 #include <QPaintEvent>
 #include <QProgressBar>
+#include <QPushButton>
 #include <QShowEvent>
 #include <QSignalBlocker>
 #include <QSizePolicy>
@@ -1212,6 +1214,13 @@ SplitInput::SplitInput(QWidget *parent, Split *_chatWidget,
 
     QEasingCurve curve;
     curve.setCustomType(highlightEasingFunction);
+    this->focusAnimation_.setDuration(150);
+    this->focusAnimation_.setEasingCurve(QEasingCurve::OutCubic);
+    connect(&this->focusAnimation_, &QVariantAnimation::valueChanged, this,
+            [this](const QVariant &value) {
+                this->focusProgress_ = value.toReal();
+                this->update();
+            });
     this->backgroundColorAnimation.setDuration(500);
     this->backgroundColorAnimation.setEasingCurve(curve);
 }
@@ -1937,7 +1946,7 @@ void SplitInput::initLayout()
 
     auto inputWrapper =
         layout.emplace<QWidget>().assign(&this->ui_.inputWrapper);
-    inputWrapper->setContentsMargins(1, 1, 1, 1);
+    inputWrapper->setContentsMargins(8, 6, 8, 6);
 
     auto hboxLayout =
         inputWrapper.setLayoutType<QHBoxLayout>().withoutMargin().assign(
@@ -1948,6 +1957,7 @@ void SplitInput::initLayout()
     connect(textEdit.getElement(), &ResizingTextEdit::textChanged, this,
             &SplitInput::editTextChanged);
     textEdit->setFrameStyle(QFrame::NoFrame);
+    textEdit->document()->setDocumentMargin(0);
     this->ui_.inputHbox->setStretch(0, 1);
 
     auto *shortcutFilter = new CmdDeleteKeyFilter(this);
@@ -2342,8 +2352,8 @@ void SplitInput::themeChangedEvent()
     {
         this->ui_.replyLabel->setStyleSheet("color: #ccc");
         this->ui_.raidStatusWidget->setStyleSheet(
-            "QWidget#raidStatusWidget { background-color: rgba(91, 46, "
-            "153, 0.82); border: 0; }");
+            "QWidget#raidStatusWidget { background-color: rgba(40, 40, "
+            "44, 0.96); border: 0; }");
         this->ui_.raidStatusLabel->setStyleSheet(
             "QLabel#raidStatusLabel { color: #f1eaff; background: "
             "transparent; }");
@@ -2364,9 +2374,9 @@ void SplitInput::themeChangedEvent()
         if (this->ui_.translationPreviewWidget != nullptr)
         {
             this->ui_.translationPreviewWidget->setStyleSheet(
-                "QWidget#translationPreviewWidget { background: rgba(120, "
-                "68, 0, 0.78); border-top: 1px solid #ff8a00; }"
-                "QLabel#translationPreviewLabel { color: #ffe7c2; "
+                "QWidget#translationPreviewWidget { background: rgba(40, "
+                "40, 44, 0.96); border-top: 1px solid #45454b; }"
+                "QLabel#translationPreviewLabel { color: #d0d0d6; "
                 "background: transparent; }");
         }
 #if MOLTORINO_ENABLE_CHANNEL_POINT_REWARDS
@@ -2393,14 +2403,14 @@ void SplitInput::themeChangedEvent()
 void SplitInput::updateEmoteButton()
 {
     auto scale = this->scale();
-    auto buttonSize = int(std::round(17 * scale));
+    auto buttonSize = int(std::round(24 * scale));
     auto labelBottomInset = int(std::round(1 * scale));
 
     this->ui_.emoteButton->setFixedSize(buttonSize, buttonSize);
 
     if (this->ui_.buttonsRow)
     {
-        this->ui_.buttonsRow->setSpacing(0);
+        this->ui_.buttonsRow->setSpacing(int(std::round(2 * scale)));
         this->ui_.buttonsRow->setContentsMargins(
             0, 0, int(std::round(2 * scale)), 0);
     }
@@ -3322,6 +3332,15 @@ bool SplitInput::eventFilter(QObject *obj, QEvent *event)
         obj == this->ui_.textEdit ||
         (this->ui_.textEdit != nullptr &&
          obj == this->ui_.textEdit->viewport());
+    if (isTextEditObject &&
+        (event->type() == QEvent::FocusIn || event->type() == QEvent::FocusOut))
+    {
+        this->focusAnimation_.stop();
+        this->focusAnimation_.setStartValue(this->focusProgress_);
+        this->focusAnimation_.setEndValue(
+            event->type() == QEvent::FocusIn ? 0.8 : 0.0);
+        this->focusAnimation_.start();
+    }
     if (isTextEditObject && event->type() == QEvent::KeyPress)
     {
         auto *keyEvent = static_cast<QKeyEvent *>(event);
@@ -4968,55 +4987,28 @@ void SplitInput::editTextChanged()
     this->ui_.cancelReplyButton->setVisible(hasReply);
 }
 
-void SplitInput::paintEvent(QPaintEvent * /*event*/)
+void SplitInput::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
-
-    const bool polished = this->theme->customization.foundation ==
-                          ThemeFoundation::MoltorinoPolished;
-    const auto borderColor =
-        this->theme->isLightTheme() ? QColor(0xcccccc) : QColor(0x333333);
-    const auto drawBorder = [&painter, &borderColor](QRect rect) {
-        if (rect.isEmpty())
-        {
-            return;
-        }
-        painter.fillRect(rect.left(), rect.top(), rect.width(), 1, borderColor);
-        painter.fillRect(rect.left(), rect.bottom(), rect.width(), 1,
-                         borderColor);
-        painter.fillRect(rect.left(), rect.top(), 1, rect.height(),
-                         borderColor);
-        painter.fillRect(rect.right(), rect.top(), 1, rect.height(),
-                         borderColor);
-    };
-
-    const auto inputBoxRect = this->ui_.inputWrapper->geometry();
-    painter.fillRect(inputBoxRect, this->backgroundColor());
-    if (!polished)
-    {
-        drawBorder(inputBoxRect);
-    }
-
+    const auto &ui = uiPalette(this->theme->isLightTheme());
+    painter.fillRect(this->rect(), this->theme->splits.background);
+    painter.setRenderHint(QPainter::Antialiasing);
+    const QRectF input(this->ui_.inputWrapper->geometry());
+    painter.setBrush(this->backgroundColor());
+    painter.setPen(QPen(uiMix(ui.border, ui.focus, this->focusProgress_), 1));
+    painter.drawRoundedRect(input.adjusted(0.5, 0.5, -0.5, -0.5),
+                            6 * this->scale(), 6 * this->scale());
     if (this->enableInlineReplying_ && this->replyTarget_ != nullptr)
     {
-        const auto replyRect = this->ui_.replyWrapper->geometry();
-        painter.fillRect(replyRect, this->theme->splits.input.background);
-        if (polished)
-        {
-            painter.setPen(this->theme->splits.header.border);
-        }
-        else
-        {
-            drawBorder(replyRect);
-            painter.setPen(borderColor);
-        }
-
-        QPoint replyLabelBorderStart(
-            replyRect.x(),
-            replyRect.y() + this->ui_.replyHbox->geometry().height());
-        QPoint replyLabelBorderEnd(replyRect.right() - 1,
-                                   replyLabelBorderStart.y());
-        painter.drawLine(replyLabelBorderStart, replyLabelBorderEnd);
+        const QRectF reply(this->ui_.replyWrapper->geometry());
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(uiMix(ui.surface, ui.canvas, 0.3));
+        painter.drawRoundedRect(reply, 4 * this->scale(), 4 * this->scale());
+        painter.fillRect(
+            QRectF(reply.left() + 3 * this->scale(),
+                   reply.top() + 5 * this->scale(), 2 * this->scale(),
+                   std::max<qreal>(0, reply.height() - 10 * this->scale())),
+            ui.muted);
     }
 }
 
@@ -5183,25 +5175,14 @@ bool SplitInput::shouldPreventInput(const QString &text) const
 
 int SplitInput::marginForTheme() const
 {
-    if (!themeUsesClassicSplitFrame(this->theme->customization.foundation))
-    {
-        return 1;
-    }
-
-    if (this->theme->isLightTheme())
-    {
-        return int(3 * this->scale());
-    }
-    else
-    {
-        return int(1 * this->scale());
-    }
+    return std::max(1, int(4 * this->scale()));
 }
 
 void SplitInput::applyOuterMargin()
 {
-    auto margin = std::max(this->marginForTheme() - 1, 0);
+    const auto margin = this->marginForTheme();
     this->ui_.vbox->setContentsMargins(margin, margin, margin, margin);
+    this->ui_.vbox->setSpacing(std::max(1, int(3 * this->scale())));
 }
 
 int SplitInput::replyMessageWidth() const
@@ -5227,9 +5208,10 @@ void SplitInput::updateTextEditPalette()
                    : this->theme->tabs.selected.backgrounds.regular);
 
     // Background color
-    p.setBrush(QPalette::Base, this->backgroundColor());
+    p.setBrush(QPalette::Base, Qt::transparent);
 
     this->ui_.textEdit->setPalette(p);
+    this->ui_.textEdit->viewport()->setAutoFillBackground(false);
 }
 
 QColor SplitInput::backgroundColor() const
