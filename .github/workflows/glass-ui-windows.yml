@@ -29,7 +29,7 @@ jobs:
         with:
           cache: true
           cache-key-prefix: Windows-QtCache-6.9.3-v2
-          modules: qtimageformats qtsvg
+          modules: qtimageformats
           version: 6.9.3
 
       - name: Enable Developer Command Prompt
@@ -102,11 +102,11 @@ jobs:
           Copy-Item bin/Moltorino7.exe Moltorino-Glass/
           Copy-Item -Recurse bin/licenses Moltorino-Glass/
           ..\.CI\deploy-crt.ps1 Moltorino-Glass -Architecture x64
-          7z a Moltorino-Glass-Pass-01-Windows-x64.zip Moltorino-Glass/
+          7z a Moltorino-Windows.zip Moltorino-Glass/
 
       - name: Upload Glass UI Windows build
         uses: actions/upload-artifact@v7
         with:
-          name: Moltorino-Glass-Pass-01-Windows-x64
-          path: build/Moltorino-Glass-Pass-01-Windows-x64.zip
+          name: Moltorino-Windows
+          path: build/Moltorino-Windows.zip
           retention-days: 14
