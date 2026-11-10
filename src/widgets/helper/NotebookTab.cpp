@@ -2377,18 +2377,9 @@ QRect NotebookTab::getXRect() const
     float s = this->scale();
     int size = static_cast<int>(16 * s);
 
-    int centerAdjustment = this->tabLocation_ == NotebookTabLocation::Top
-                               ? (size / 3)   // slightly off true center
-                               : (size / 2);  // true center
-
     float compactReducer = getCompactReducer(getSettings()->tabStyle);
     QRect xRect(rect.right() - static_cast<int>((20 - compactReducer) * s),
-                rect.center().y() - centerAdjustment, size, size);
-
-    if (this->selected_)
-    {
-        translateRectForLocation(xRect, this->tabLocation_, 1);
-    }
+                (rect.height() - size) / 2, size, size);
 
     return xRect;
 }

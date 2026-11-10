@@ -210,7 +210,9 @@ endif()
 
 foreach(_moltorino_pathmap_pair IN LISTS _moltorino_pathmap_pairs)
     if(MSVC)
-        add_compile_options("$<${_moltorino_public_config}:/pathmap:${_moltorino_pathmap_pair}>")
+        # sccache treats unknown slash options as input files. MSVC accepts
+        # the dash spelling too, preserving path mapping while allowing caching.
+        add_compile_options("$<${_moltorino_public_config}:-pathmap:${_moltorino_pathmap_pair}>")
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         add_compile_options("$<${_moltorino_public_config}:-ffile-prefix-map=${_moltorino_pathmap_pair}>")
         add_compile_options("$<${_moltorino_public_config}:-fdebug-prefix-map=${_moltorino_pathmap_pair}>")

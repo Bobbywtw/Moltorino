@@ -48,7 +48,8 @@ jobs:
         with:
           variant: sccache
           save: true
-          key: sccache-graphite-windows2022-x64-6.9.3-no-pch-v1
+          max-size: 2G
+          key: sccache-graphite-windows2022-x64-6.9.3-no-pch-v2
 
       - name: Cache Conan packages
         id: conan-cache
@@ -127,6 +128,14 @@ jobs:
               -DCHATTERINO_SPELLCHECK=On `
               -DMOLTORINO_VELOPACK=Off `
               ..
+          if ($LASTEXITCODE -ne 0) { throw "CMake configuration failed" }
+          # Verify real project compiler arguments before the expensive full build.
+          cmake --build . --target src/CMakeFiles/chatterino-lib-version.dir/common/Version.cpp.obj --verbose
+          if ($LASTEXITCODE -ne 0) { throw "Version object compilation failed" }
+          sccache --show-stats
+          if (@(Get-ChildItem $env:SCCACHE_DIR -File -Recurse).Count -eq 0) {
+            throw "The real project compile is not writing compiler cache data"
+          }
           cmake --build . --parallel 4
 
       - name: Verify compiler cache data

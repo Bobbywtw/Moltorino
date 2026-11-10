@@ -2403,6 +2403,9 @@ void SplitInput::themeChangedEvent()
 void SplitInput::updateEmoteButton()
 {
     auto scale = this->scale();
+    this->ui_.inputWrapper->setContentsMargins(
+        int(std::round(8 * scale)), int(std::round(6 * scale)),
+        int(std::round(8 * scale)), int(std::round(6 * scale)));
     auto buttonSize = int(std::round(24 * scale));
     auto labelBottomInset = int(std::round(1 * scale));
 

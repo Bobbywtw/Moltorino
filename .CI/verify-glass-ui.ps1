@@ -33,7 +33,7 @@ Remove-Item $identityPath
 $settingsFile = Join-Path $identity.settingsDirectory 'settings.json'
 if (Test-Path $settingsFile) { throw "Refusing to replace an existing profile at $settingsFile" }
 New-Item -ItemType Directory -Path $identity.settingsDirectory -Force | Out-Null
-foreach ($theme in @('Dark', 'Glass')) {
+foreach ($theme in @('Dark', 'Glass', 'Moltorino Midnight')) {
     $profile = @{ appearance = @{ theme = @{ name = $theme; moltorinoSelection = $theme; defaultApplied = $true; bluzyrinoMigrated = $true } } }
     $profile | ConvertTo-Json -Depth 8 | Set-Content $settingsFile -Encoding utf8
     $before = (Get-FileHash $settingsFile).Hash

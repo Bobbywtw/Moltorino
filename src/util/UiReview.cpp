@@ -15,6 +15,7 @@
 #include "widgets/splits/SplitInput.hpp"
 #include "widgets/Window.hpp"
 
+#include <QAction>
 #include <QApplication>
 #include <QDir>
 #include <QMenu>

@@ -930,6 +930,20 @@ void Theme::parseFrom(const QJsonObject &root, bool isCustomTheme)
         this->messages.selection = QColor(255, 255, 255, 40);
         this->messages.disabled = QColor(20, 20, 22, 105);
         this->splits.messageSeperator = QColor(255, 255, 255, 10);
+        this->accent = QColor(177, 177, 188);
+        this->customization.accent = this->accent;
+        this->customization.chatBackground = ui.canvas;
+        this->customization.chatText = ui.text;
+        this->customization.systemText = ui.muted;
+        this->customization.timestampText = this->messages.textColors.timestamp;
+        // Built-in profiles share a flat reading surface. Custom theme effects
+        // remain available through the existing customization settings.
+        this->customization.messageShadow = false;
+        this->customization.chatCornerRadius =
+            std::min(this->customization.chatCornerRadius, 4);
+        this->customization.chatBorderColor = ui.muted;
+        this->customization.chatBorderOpacity =
+            std::min(this->customization.chatBorderOpacity, 8);
     }
     this->customization.background = ui.canvas;
     this->customization.surface = ui.surface;

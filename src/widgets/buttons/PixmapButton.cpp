@@ -64,7 +64,8 @@ void PixmapButton::paintContent(QPainter &painter)
     {
         return;
     }
-    painter.setOpacity(this->currentContentOpacity());
+    const auto opacity = painter.opacity();
+    painter.setOpacity(opacity * this->currentContentOpacity());
 
     QRect rect = this->rect();
 
@@ -87,7 +88,7 @@ void PixmapButton::paintContent(QPainter &painter)
 
     painter.drawPixmap(rect, this->resizedPixmap_);
 
-    painter.setOpacity(1);
+    painter.setOpacity(opacity);
 }
 
 }
