@@ -47,7 +47,7 @@ jobs:
       - name: Cache Conan packages
         uses: actions/cache@v5
         with:
-          key: Windows2022-X64-conan-user-${{ hashFiles('**/conanfile.py') }}-QT6
+          key: Windows2022-X64-conan-user-${{ hashFiles('**/conanfile.py') }}-QT6-libwebm-conforming
           path: ~/.conan2/
 
       - name: Setup Python
@@ -67,9 +67,11 @@ jobs:
         run: |
           mkdir build
           cd build
+          # libwebm's nested MasterValueParser lookup needs conforming MSVC lookup.
           conan install .. \
               -s build_type=RelWithDebInfo \
               -c tools.cmake.cmaketoolchain:generator="Ninja" \
+              -c 'libwebm/*:tools.build:cxxflags=["/permissive-"]' \
               -b missing \
               -c tools.build:jobs=4 \
               --output-folder=. \
@@ -98,11 +100,40 @@ jobs:
         working-directory: build
         shell: pwsh
         run: |
-          windeployqt bin/Moltorino7.exe --release --no-compiler-runtime --no-translations --no-opengl-sw --dir Moltorino-Glass/ --force-openssl
-          Copy-Item bin/Moltorino7.exe Moltorino-Glass/
-          Copy-Item -Recurse bin/licenses Moltorino-Glass/
+          New-Item -ItemType Directory Moltorino-Glass -Force | Out-Null
+          Copy-Item bin/* Moltorino-Glass/ -Recurse -Exclude *.pdb
+          windeployqt Moltorino-Glass/Moltorino7.exe --release --no-compiler-runtime --no-translations --no-opengl-sw --dir Moltorino-Glass/ --force-openssl
+          if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
           ..\.CI\deploy-crt.ps1 Moltorino-Glass -Architecture x64
+          if ($LASTEXITCODE -ne 0) { throw "CRT deployment failed" }
+          Set-Content Moltorino-Glass/modes -Value portable -Encoding ascii
           7z a Moltorino-Windows.zip Moltorino-Glass/
+          if ($LASTEXITCODE -ne 0) { throw "ZIP creation failed" }
+
+      - name: Verify portable Windows package
+        working-directory: build
+        shell: pwsh
+        run: |
+          $verifyDir = Join-Path $env:RUNNER_TEMP 'glass-portable-check'
+          Expand-Archive Moltorino-Windows.zip -DestinationPath $verifyDir
+          $packageDir = Join-Path $verifyDir 'Moltorino-Glass'
+          foreach ($file in @('Moltorino7.exe', 'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Widgets.dll', 'Qt6Network.dll', 'Qt6Sql.dll', 'platforms/qwindows.dll', 'sqldrivers/qsqlite.dll', 'tls/qopensslbackend.dll', 'libssl-3-x64.dll', 'libcrypto-3-x64.dll', 'support/media/ffmpeg.exe', 'support/media/ffprobe.exe', 'support/7zip/7z.exe', 'support/7zip/7z.dll', 'modes')) {
+            if (!(Test-Path (Join-Path $packageDir $file))) { throw "Missing portable file: $file" }
+          }
+          # Launch the extracted package without Qt, Conan or MSVC tools on PATH.
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $env:QT_PLUGIN_PATH = $packageDir
+          $env:QT_QPA_PLATFORM_PLUGIN_PATH = Join-Path $packageDir 'platforms'
+          Push-Location $verifyDir
+          foreach ($program in @(@('Moltorino7.exe', '--version'), @('support/media/ffmpeg.exe', '-version'), @('support/media/ffprobe.exe', '-version'))) {
+            $process = Start-Process -FilePath (Join-Path $packageDir $program[0]) -ArgumentList $program[1] -PassThru -NoNewWindow
+            if (!$process.WaitForExit(30000)) {
+              $process.Kill()
+              throw "Portable launch timed out: $($program[0])"
+            }
+            if ($process.ExitCode -ne 0) { throw "Portable launch failed: $($program[0]) ($($process.ExitCode))" }
+          }
+          Pop-Location
 
       - name: Upload Glass UI Windows build
         uses: actions/upload-artifact@v7
