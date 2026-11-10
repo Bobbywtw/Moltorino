@@ -64,6 +64,9 @@ jobs:
 
       - name: Install dependencies
         shell: bash
+        env:
+          # Keep Conan's tool PATH when libvpx invokes MSBuild (yasm lives there).
+          UseEnv: "true"
         run: |
           mkdir build
           cd build
