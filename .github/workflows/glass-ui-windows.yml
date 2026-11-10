@@ -132,6 +132,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
           ..\.CI\deploy-crt.ps1 Moltorino-Glass -Architecture x64
           if ($LASTEXITCODE -ne 0) { throw "CRT deployment failed" }
+          ..\.CI\deploy-crt.ps1 Moltorino-Glass/support/media -Architecture x64
+          if ($LASTEXITCODE -ne 0) { throw "Media CRT deployment failed" }
           Set-Content Moltorino-Glass/modes -Value portable -Encoding ascii
           7z a Moltorino-Windows.zip Moltorino-Glass/
           if ($LASTEXITCODE -ne 0) { throw "ZIP creation failed" }
@@ -145,6 +147,18 @@ jobs:
           $packageDir = Join-Path $verifyDir 'Moltorino-Glass'
           foreach ($file in @('Moltorino7.exe', 'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Widgets.dll', 'Qt6Network.dll', 'Qt6Sql.dll', 'platforms/qwindows.dll', 'sqldrivers/qsqlite.dll', 'tls/qopensslbackend.dll', 'libssl-3-x64.dll', 'libcrypto-3-x64.dll', 'support/media/ffmpeg.exe', 'support/media/ffprobe.exe', 'support/7zip/7z.exe', 'support/7zip/7z.dll', 'modes')) {
             if (!(Test-Path (Join-Path $packageDir $file))) { throw "Missing portable file: $file" }
+          }
+          # Each executable must resolve its VC runtime without a system install.
+          foreach ($executable in Get-ChildItem $packageDir -Recurse -Filter *.exe) {
+            $imports = & dumpbin /DEPENDENTS $executable.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Cannot inspect $($executable.Name)" }
+            foreach ($line in $imports) {
+              if ($line -match '^\s*((?:MSVCP|VCRUNTIME)[\w_]*\.dll)\s*$') {
+                if (!(Test-Path (Join-Path $executable.DirectoryName $Matches[1]))) {
+                  throw "Missing local $($Matches[1]) for $($executable.FullName)"
+                }
+              }
+            }
           }
           # Launch the extracted package without Qt, Conan or MSVC tools on PATH.
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
