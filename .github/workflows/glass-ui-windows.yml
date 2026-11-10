@@ -12,7 +12,7 @@ env:
 jobs:
   build-windows:
     name: Build Glass UI - Windows x64
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
       - uses: actions/checkout@v6
@@ -42,12 +42,12 @@ jobs:
         with:
           variant: sccache
           save: true
-          key: sccache-glass-windows-x64-6.9.3
+          key: sccache-glass-windows2022-x64-6.9.3
 
       - name: Cache Conan packages
         uses: actions/cache@v5
         with:
-          key: Windows-X64-conan-user-${{ hashFiles('**/conanfile.py') }}-QT6
+          key: Windows2022-X64-conan-user-${{ hashFiles('**/conanfile.py') }}-QT6
           path: ~/.conan2/
 
       - name: Setup Python
