@@ -66,7 +66,7 @@ jobs:
 
       - name: Install dependencies
         id: dependencies
-        shell: pwsh
+        shell: bash
         env:
           # Keep Conan's tool PATH when libvpx invokes MSBuild (yasm lives there).
           UseEnv: "true"
@@ -74,15 +74,16 @@ jobs:
           mkdir build
           cd build
           # libwebm's nested MasterValueParser lookup needs conforming MSVC lookup.
-          conan install .. `
-              -s build_type=RelWithDebInfo `
-              -c tools.cmake.cmaketoolchain:generator="Ninja" `
-              -c 'libwebm/*:tools.build:cxxflags=["/permissive-"]' `
-              -b missing `
-              -c tools.build:jobs=4 `
-              --output-folder=. `
+          # A relative metadata path also works for native pkgconf inside MSYS.
+          conan install .. \
+              -s build_type=RelWithDebInfo \
+              -c tools.cmake.cmaketoolchain:generator="Ninja" \
+              -c 'libwebm/*:tools.build:cxxflags=["/permissive-"]' \
+              -c 'ffmpeg/*:tools.gnu:extra_configure_args=["--env=PKG_CONFIG_PATH=conan"]' \
+              -b missing \
+              -c tools.build:jobs=4 \
+              --output-folder=. \
               -o with_openssl3=True
-          if ($LASTEXITCODE -ne 0) { throw "Conan dependency installation failed" }
           conan cache clean --source --build --download "*"
 
       - name: Show FFmpeg configure failure
