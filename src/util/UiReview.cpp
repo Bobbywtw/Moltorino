@@ -9,6 +9,7 @@
 #include "messages/MessageBuilder.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
+#include "widgets/buttons/Button.hpp"
 #include "widgets/dialogs/EmotePopup.hpp"
 #include "widgets/dialogs/SettingsDialog.hpp"
 #include "widgets/glass/GlassChrome.hpp"
@@ -22,6 +23,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCursor>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -132,6 +134,52 @@ class ApplicationReview final : public QObject
         });
     }
 
+    void interactions(std::function<void()> next)
+    {
+        Button *target = nullptr;
+        for (auto *button : split_->getInput().findChildren<Button *>())
+            if (button->isVisible() && button->enabled() &&
+                button->width() <= 36 && button->height() <= 36 &&
+                !button->menu())
+            {
+                target = button;
+                break;
+            }
+        if (!target)
+        {
+            valid_ = false;
+            next();
+            return;
+        }
+        const auto point = QPointF(target->rect().center());
+        QCursor::setPos(target->mapToGlobal(point.toPoint()));
+        QEnterEvent enter(point, target->mapTo(window_, point),
+                          target->mapToGlobal(point));
+        QApplication::sendEvent(target, &enter);
+        later(180, [this, target, point, next] {
+            save(window_, "chat-hover");
+            QMouseEvent press(QEvent::MouseButtonPress, point,
+                              target->mapToGlobal(point), Qt::LeftButton,
+                              Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(target, &press);
+            later(55, [this, target, next] {
+                save(window_, "chat-pressed");
+                // Release outside the real control: exercise its native pressed
+                // state without invoking a chat, moderation or navigation action.
+                const QPointF outside(-10, -10);
+                QMouseEvent release(QEvent::MouseButtonRelease, outside,
+                                    target->mapToGlobal(outside),
+                                    Qt::LeftButton, Qt::NoButton,
+                                    Qt::NoModifier);
+                QApplication::sendEvent(target, &release);
+                QEvent leave(QEvent::Leave);
+                QApplication::sendEvent(target, &leave);
+                QCursor::setPos(window_->mapToGlobal(QPoint(250, 250)));
+                later(200, std::move(next));
+            });
+        });
+    }
+
 public:
     ApplicationReview(Window *window, Split *split, QString output)
         : QObject(qApp)
@@ -153,46 +201,50 @@ public:
                 for (const auto &kind : {"tab", "header", "composer", "button"})
                     valid_ &= kinds.contains(kind);
             }
-            measurements_["singleLineHeight"] = split_->getInput().height();
-            split_->getInput().setInputText(
-                "First line\nSecond line\nThird line");
-            later(200, [this] {
-                measurements_["multilineHeight"] = split_->getInput().height();
-                split_->getInput().setInputText("Thanks for the stream!");
-                window_->resize(400, 680);
-                later(300, [this] {
-                    measurements_["narrowHeight"] = split_->getInput().height();
-                    save(window_, "chat-resized");
-                    window_->resize(1180, 760);
+            interactions([this] {
+                measurements_["singleLineHeight"] = split_->getInput().height();
+                split_->getInput().setInputText(
+                    "First line\nSecond line\nThird line");
+                later(200, [this] {
+                    measurements_["multilineHeight"] =
+                        split_->getInput().height();
+                    split_->getInput().setInputText("Thanks for the stream!");
+                    window_->resize(400, 680);
                     later(300, [this] {
-                        measurements_["restoredHeight"] =
+                        measurements_["narrowHeight"] =
                             split_->getInput().height();
-                        valid_ &= measurements_["multilineHeight"].toInt() >
-                                  measurements_["singleLineHeight"].toInt();
-                        valid_ &=
-                            qAbs(measurements_["restoredHeight"].toInt() -
-                                 measurements_["singleLineHeight"].toInt()) <=
-                            2;
-                        if (!glass::enabled())
-                        {
-                            menu();
-                            return;
-                        }
-                        on_ = window_->grab().toImage();
-                        glass::reviewOptics(window_, false);
-                        later(200, [this] {
-                            save(window_, "chat-optics-off");
-                            auto off = window_->grab().toImage();
-                            int changed = 0;
-                            for (int y = 0; y < off.height(); ++y)
-                                for (int x = 0; x < off.width(); ++x)
-                                    if (off.pixel(x, y) != on_.pixel(x, y))
-                                        ++changed;
-                            measurements_["opticsChangedPixels"] = changed;
-                            valid_ &= changed > 500;
-                            glass::reviewOptics(window_, true);
-                            later(200, [this] {
+                        save(window_, "chat-resized");
+                        window_->resize(1180, 760);
+                        later(300, [this] {
+                            measurements_["restoredHeight"] =
+                                split_->getInput().height();
+                            valid_ &= measurements_["multilineHeight"].toInt() >
+                                      measurements_["singleLineHeight"].toInt();
+                            valid_ &=
+                                qAbs(measurements_["restoredHeight"].toInt() -
+                                     measurements_["singleLineHeight"]
+                                         .toInt()) <= 2;
+                            if (!glass::enabled())
+                            {
                                 menu();
+                                return;
+                            }
+                            on_ = window_->grab().toImage();
+                            glass::reviewOptics(window_, false);
+                            later(200, [this] {
+                                save(window_, "chat-optics-off");
+                                auto off = window_->grab().toImage();
+                                int changed = 0;
+                                for (int y = 0; y < off.height(); ++y)
+                                    for (int x = 0; x < off.width(); ++x)
+                                        if (off.pixel(x, y) != on_.pixel(x, y))
+                                            ++changed;
+                                measurements_["opticsChangedPixels"] = changed;
+                                valid_ &= changed > 500;
+                                glass::reviewOptics(window_, true);
+                                later(200, [this] {
+                                    menu();
+                                });
                             });
                         });
                     });

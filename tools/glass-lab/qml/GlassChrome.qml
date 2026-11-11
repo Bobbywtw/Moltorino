@@ -4,6 +4,7 @@ Item {
     id: chrome
     property url backdropUrl
     property bool opticsEnabled: true
+    NumberAnimation on opacity { from: 0.88; to: 1.0; duration: 120; easing.type: Easing.OutCubic }
     // The same GPU material as Build #5. The native widgets above this scene
     // own all text, icons, emotes, hit testing, focus, accessibility and actions.
     Item {
@@ -32,17 +33,17 @@ Item {
             height: bounds.height
             visible: width > 1 && height > 1
             z: kind === "window" || kind === "toolbar" ? 0 : kind === "button" || kind === "field" ? 2 : 1
-            property real engagement: disabled ? 0 : pressed ? 1.0 : Math.max(emphasis, hovered ? 0.65 : 0.0)
+            property real engagement: disabled ? 0 : pressed ? 1.0 : kind === "button" ? (hovered ? 0.65 : 0) : Math.max(emphasis, hovered ? 0.65 : 0.0)
             Behavior on engagement { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-            opacity: disabled ? 0.38 : kind === "button" ? (0.32 + engagement * 0.68) : 1.0
+            opacity: disabled ? (kind === "button" ? 0.12 : 0.38) : kind === "button" ? (0.32 + engagement * 0.68) : 1.0
             Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
             LiquidGlassPanel {
                 anchors.fill: parent
                 backgroundLayer: backdrop
                 sourceOrigin: Qt.point(surface.x, surface.y + surface.pressOffset)
                 active: chrome.opticsEnabled
-                refraction: 1.3 + surface.engagement * 0.12
-                vibrancy: 1.42
+                refraction: 1.35 + surface.engagement * 0.12
+                vibrancy: 1.45
                 edgeLight: 2.35 + surface.engagement * 0.3
                 dispersion: 0.65
                 motionX: surface.hovered ? (surface.pointer.x - 0.5) * 0.65 : 0

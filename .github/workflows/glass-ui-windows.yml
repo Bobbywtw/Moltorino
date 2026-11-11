@@ -16,7 +16,6 @@ on:
       - "!.CI/glass-lab-checks.cpp"
       - "!.CI/reuse-composer-package.ps1"
       # The scene embedded by the native integration requires the full app.
-      - "tools/glass-lab/qml/GlassIntegrationPreview.qml"
       - "tools/glass-lab/qml/GlassChrome.qml"
       - "tools/glass-lab/qml/LiquidGlassPanel.qml"
       - "tools/glass-lab/shaders/**"
@@ -259,6 +258,8 @@ jobs:
           Copy-Item bin/* Moltorino-Glass/ -Recurse -Exclude *.pdb
           windeployqt Moltorino-Glass/Moltorino7.exe --release --no-compiler-runtime --no-translations --no-opengl-sw --qmldir ../tools/glass-lab/qml --dir Moltorino-Glass/ --force-openssl
           if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
+          New-Item -ItemType Directory Moltorino-Glass/licenses/Qt6 -Force | Out-Null
+          Copy-Item ../resources/licenses/qt6/* Moltorino-Glass/licenses/Qt6/
           ..\.CI\deploy-crt.ps1 Moltorino-Glass -Architecture x64
           if ($LASTEXITCODE -ne 0) { throw "CRT deployment failed" }
           ..\.CI\deploy-crt.ps1 Moltorino-Glass/support/media -Architecture x64

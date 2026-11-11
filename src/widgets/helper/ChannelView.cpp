@@ -5540,6 +5540,19 @@ void ChannelView::paintChatFrame(QPainter &painter)
         this->chatFrameOutsidePath_.get(), this->chatFrameBorderPath_.get());
 }
 
+QRectF ChannelView::glassWallpaperTarget() const
+{
+    if (getSettings()->continuousSplitBackground && this->split_ != nullptr &&
+        this->context_ == Context::None && this->parentWidget() == this->split_)
+    {
+        if (auto *container =
+                dynamic_cast<SplitContainer *>(this->split_->parentWidget()))
+            return QRectF(container->mapTo(this->window(), QPointF()),
+                          QSizeF(container->size()));
+    }
+    return QRectF(this->mapTo(this->window(), QPointF()), QSizeF(this->size()));
+}
+
 void ChannelView::paintWallpaper(QPainter &painter)
 {
     const auto &profile = getTheme()->customization;

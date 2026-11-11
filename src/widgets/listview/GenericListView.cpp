@@ -6,6 +6,7 @@
 
 #include "common/UiPalette.hpp"
 #include "singletons/Theme.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 #include "widgets/listview/GenericListModel.hpp"
 
 #include <QKeyEvent>
@@ -161,7 +162,9 @@ void GenericListView::refreshTheme(const Theme &theme)
             min-width: 8;
             height: 8;
         })")
-            .arg(textCol, selCol, ui.surface.name(QColor::HexArgb));
+            .arg(textCol, selCol,
+                 glass::enabled() ? QStringLiteral("transparent")
+                                  : ui.surface.name(QColor::HexArgb));
 
     this->setStyleSheet(listStyle);
 }

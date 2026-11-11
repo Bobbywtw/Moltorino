@@ -1715,7 +1715,7 @@ void NotebookTab::paintEvent(QPaintEvent *)
                           individual || this->isLastVisible_);
     painter.setRenderHint(QPainter::Antialiasing, tabRadius > 0);
     if (!(glass::paint(painter, shapedRect, glass::Surface::Tab,
-                       this->selected_ ? 1.0 : this->hoverProgress(), scale)))
+                       this->selected_ ? 1.0 : 0.0, scale)))
     {
         painter.fillPath(backgroundPath, tabBackground);
     }

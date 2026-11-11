@@ -1,0 +1,17 @@
+Moltorino uses the unmodified, dynamically linked Qt 6.9.3 libraries.
+Qt Widgets, Qt Quick, Qt QML, Qt Quick Widgets and the other applicable
+Qt runtime modules are available under LGPL version 3.
+The LGPL-3.0-only.txt and GPL-3.0-only.txt texts accompany this notice.
+
+Upstream source for this exact Qt version:
+https://download.qt.io/official_releases/qt/6.9/6.9.3/single/
+https://code.qt.io/cgit/qt/qtbase.git/tree/?h=v6.9.3
+https://code.qt.io/cgit/qt/qtdeclarative.git/tree/?h=v6.9.3
+
+The supplied Qt DLLs can be replaced with compatible modified Qt libraries.
+Moltorino source and build instructions:
+https://github.com/Bobbywtw/Moltorino/tree/moltorino-build-optimization-01
+
+The license texts are copied verbatim from the official qt/qtbase mirror,
+tag v6.9.3, directory LICENSES. Qt Shader Tools is used only during the build;
+the qsb compiler and Qt Shader Tools library are not distributed.

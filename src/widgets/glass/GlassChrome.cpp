@@ -7,19 +7,24 @@
 #    include "singletons/ThemeCustomization.hpp"
 #    include "singletons/ThemeVideo.hpp"
 #    include "singletons/ThemeVideoDecoder.hpp"
+#    include "widgets/AccountSwitchPopup.hpp"
+#    include "widgets/BasePopup.hpp"
 #    include "widgets/buttons/Button.hpp"
 #    include "widgets/dialogs/EmotePopup.hpp"
 #    include "widgets/helper/ChannelView.hpp"
 #    include "widgets/helper/NotebookTab.hpp"
+#    include "widgets/splits/Split.hpp"
 
 #    include <QAbstractButton>
 #    include <QAbstractItemModel>
 #    include <QAbstractScrollArea>
 #    include <QApplication>
 #    include <QComboBox>
+#    include <QCryptographicHash>
 #    include <QDebug>
 #    include <QElapsedTimer>
 #    include <QEvent>
+#    include <QFile>
 #    include <QImage>
 #    include <QJsonArray>
 #    include <QLineEdit>
@@ -41,6 +46,7 @@
 
 #    include <algorithm>
 #    include <memory>
+#    include <optional>
 
 namespace chatterino::glass {
 namespace {
@@ -84,8 +90,10 @@ public:
         if (!p.owner)
             return {};
         const auto rect =
-            QRectF(p.owner->mapTo(window, p.local.topLeft().toPoint()),
-                   p.local.size());
+            p.owner->window() == window
+                ? QRectF(p.owner->mapTo(window, p.local.topLeft()),
+                         p.local.size())
+                : QRectF();
         const bool shown = p.owner->isVisibleTo(window) && !rect.isEmpty();
         const bool hover = shown && rect.contains(cursor);
         switch (role)
@@ -94,12 +102,24 @@ public:
                 return shown ? rect : QRectF();
             case Kind:
                 return p.kind;
-            case Emphasis:
+            case Emphasis: {
+                auto *focus = QApplication::focusWidget();
+                if (p.kind == "composer")
+                    return focus && (focus == p.owner ||
+                                     p.owner->isAncestorOf(focus))
+                               ? 1.
+                               : 0.;
                 return p.emphasis;
+            }
             case Hovered:
                 return hover;
-            case Pressed:
+            case Pressed: {
+                if (auto *b = dynamic_cast<Button *>(p.owner.data()))
+                    return b->leftMouseButtonDown() || b->menuVisible();
+                if (auto *b = qobject_cast<QAbstractButton *>(p.owner.data()))
+                    return b->isDown();
                 return hover && (QApplication::mouseButtons() & Qt::LeftButton);
+            }
             case Disabled: {
                 auto *button = dynamic_cast<Button *>(p.owner.data());
                 return !p.owner->isEnabled() || (button && !button->enabled());
@@ -182,6 +202,10 @@ public:
         setAttribute(Qt::WA_NoSystemBackground);
         setFocusPolicy(Qt::NoFocus);
     }
+    bool rendering() const
+    {
+        return rendering_;
+    }
     void paintEvent(QPaintEvent *) override
     {
         if (rendering_)
@@ -209,12 +233,16 @@ public:
     bool failed = false;
     QSize backdropSize;
     QImage popupBackdrop;
+    QPointer<QWidget> popupOwner;
+    QTimer popupRefresh;
     QPoint popupBackdropOrigin;
     QString backdropKey;
+    std::optional<ThemeCustomizationProfile> backdropProfile;
     QString videoSource;
     std::shared_ptr<ThemeVideo> video;
     QElapsedTimer videoThrottle;
     int frames = 0;
+    QList<QRectF> wallpaperGeometry;
     explicit Chrome(QWidget *parent)
         : QQuickWidget(parent)
     {
@@ -222,18 +250,26 @@ public:
         // This capture stays in memory, is never saved, and never reads the desktop.
         if (parent->windowType() == Qt::Popup ||
             parent->windowType() == Qt::ToolTip ||
-            qobject_cast<QMenu *>(parent))
+            qobject_cast<QMenu *>(parent) ||
+            dynamic_cast<BasePopup *>(parent) ||
+            dynamic_cast<AccountSwitchPopup *>(parent))
         {
             auto *owner = parent->parentWidget()
                               ? parent->parentWidget()->window()
                               : QApplication::activeWindow();
             if (owner && owner != parent && owner->isVisible())
             {
-                popupBackdrop = owner->grab().toImage();
-                popupBackdropOrigin =
-                    parent->mapFromGlobal(owner->mapToGlobal(QPoint()));
+                popupOwner = owner;
+                capturePopupBackdrop();
             }
         }
+        popupRefresh.setInterval(125);
+        connect(&popupRefresh, &QTimer::timeout, this, [this] {
+            if (isVisible() && !failed)
+                capturePopupBackdrop();
+        });
+        if (popupOwner)
+            popupRefresh.start();
         layers.push_back(this);
         setObjectName("moltorinoGpuChrome");
         videoThrottle.start();
@@ -247,20 +283,29 @@ public:
         setFocusPolicy(Qt::NoFocus);
         setClearColor(Qt::transparent);
         setResizeMode(QQuickWidget::SizeRootObjectToView);
+        quickWindow()->setPersistentSceneGraph(false);
+        connect(
+            quickWindow(), &QQuickWindow::sceneGraphInitialized, this, [this] {
+                if (quickWindow()->rendererInterface()->graphicsApi() ==
+                    QSGRendererInterface::Software)
+                    failRenderer(QStringLiteral("Software Qt Quick cannot "
+                                                "execute the optical shaders"));
+                else
+                    parentWidget()->update();
+            });
         panels.window = parent;
         backdrop = new Backdrop;
         engine()->addImageProvider("ownedBackdrop", backdrop);
         rootContext()->setContextProperty("chromePanels", &panels);
         connect(this, &QQuickWidget::sceneGraphError, this,
                 [this](auto, const QString &message) {
-                    failed = true;
-                    qWarning() << "GLASS_GPU_ERROR" << message;
-                    parentWidget()->update();
+                    failRenderer(message);
                 });
         setSource(QUrl("qrc:/moltorino-glass/GlassChrome.qml"));
         if (status() == QQuickWidget::Error)
         {
-            failed = true;
+            failRenderer(
+                QStringLiteral("Production material QML failed to load"));
             qWarning() << "GLASS_QML_ERROR" << errors();
         }
         synchronize.setSingleShot(true);
@@ -280,8 +325,50 @@ public:
         }
         request();
     }
+    void capturePopupBackdrop()
+    {
+        if (!popupOwner || !popupOwner->isVisible() ||
+            popupOwner->isMinimized())
+            return;
+        const auto origin =
+            popupOwner->mapFromGlobal(parentWidget()->mapToGlobal(QPoint()));
+        const auto region = QRect(origin, parentWidget()->size())
+                                .intersected(popupOwner->rect());
+        if (region.isEmpty())
+            return;
+        const auto offset = parentWidget()->mapFromGlobal(
+            popupOwner->mapToGlobal(region.topLeft()));
+        auto pixels = popupOwner->grab(region).toImage();
+        if (pixels == popupBackdrop && offset == popupBackdropOrigin)
+            return;
+        popupBackdrop = std::move(pixels);
+        popupBackdropOrigin = offset;
+        backdropKey.clear();
+        if (rootObject())
+            request();
+    }
+    void failRenderer(const QString &message)
+    {
+        failed = true;
+        popupRefresh.stop();
+        qWarning() << "GLASS_GPU_ERROR" << message;
+        QTimer::singleShot(0, this, [this] {
+            hide();
+            if (foreground)
+                foreground->hide();
+            parentWidget()->setAutoFillBackground(true);
+            const auto bg = getTheme()->window.background.name();
+            parentWidget()->setStyleSheet(
+                parentWidget()->styleSheet() +
+                QString("QMenu,QToolTip,QPushButton,QToolButton,QLineEdit,"
+                        "QComboBox {background:%1;}")
+                    .arg(bg));
+            parentWidget()->update();
+        });
+    }
     ~Chrome() override
     {
+        disconnect(quickWindow(), nullptr, this, nullptr);
         if (video)
             video->detach(this);
         layers.removeAll(this);
@@ -319,14 +406,32 @@ public:
                          QString::number(profile.wallpaperBlur) +
                          getTheme()->window.background.name() +
                          QString::number(devicePixelRatioF());
-        if (backdropSize == size() && backdropKey == key)
+        QList<QRectF> mapping;
+        for (auto *view : parentWidget()->findChildren<ChannelView *>())
+        {
+            if (auto *split = dynamic_cast<Split *>(view->parentWidget());
+                split && view->isVisible() && view->window() == parentWidget())
+            {
+                mapping << view->glassWallpaperTarget();
+                mapping << QRectF(split->mapTo(parentWidget(), QPointF()),
+                                  QSizeF(split->size()));
+            }
+        }
+        if (backdropSize == size() && wallpaperGeometry == mapping &&
+            backdropKey == key && backdropProfile &&
+            *backdropProfile == profile)
             return;
         backdropSize = size();
         backdropKey = key;
+        backdropProfile = profile;
+        wallpaperGeometry = mapping;
         QImage image(size() * devicePixelRatioF(),
                      QImage::Format_ARGB32_Premultiplied);
         image.setDevicePixelRatio(devicePixelRatioF());
-        image.fill(getTheme()->window.background);
+        const auto canvas = profile.hasWallpaper()
+                                ? profile.chatBackground
+                                : getTheme()->window.background;
+        image.fill(canvas);
         QPainter p(&image);
         auto wallpaper = profile.wallpaperSource.isEmpty() || video
                              ? QImage()
@@ -338,24 +443,59 @@ public:
         {
             p.setRenderHint(QPainter::SmoothPixmapTransform);
             p.setOpacity(profile.wallpaperOpacity / 100.);
-            const auto layout = layoutThemeWallpaper(
-                video ? size() : wallpaper.size(), QRectF(rect()),
-                profile.wallpaperMode, profile.wallpaperFocalX,
-                profile.wallpaperFocalY, profile.wallpaperZoom);
-            if (video)
-                video->paint(p, QRectF(rect()), profile);
-            else if (profile.wallpaperMode == ThemeWallpaperMode::Tile)
+            auto drawWallpaper = [&](const QRectF &target) {
+                if (video)
+                {
+                    video->paint(p, target, profile);
+                    return;
+                }
+                if (profile.wallpaperMode == ThemeWallpaperMode::Tile)
+                {
+                    const auto zoom =
+                        std::clamp(profile.wallpaperZoom, 100, 300) / 100.;
+                    p.save();
+                    p.translate(target.topLeft());
+                    p.scale(zoom, zoom);
+                    const auto clip = p.clipBoundingRect();
+                    // The tile origin stays identical to ChannelView's mapping.
+                    const auto area = clip.isEmpty()
+                                          ? QRectF(-target.topLeft() / zoom,
+                                                   QSizeF(size()) / zoom)
+                                          : clip;
+                    p.drawTiledPixmap(area, QPixmap::fromImage(wallpaper),
+                                      area.topLeft());
+                    p.restore();
+                    return;
+                }
+                const auto layout = layoutThemeWallpaper(
+                    wallpaper.size(), target, profile.wallpaperMode,
+                    profile.wallpaperFocalX, profile.wallpaperFocalY,
+                    profile.wallpaperZoom);
+                if (layout.source.isEmpty())
+                    return;
+                const qreal sx =
+                    layout.destination.width() / layout.source.width();
+                const qreal sy =
+                    layout.destination.height() / layout.source.height();
+                // Extend the same photo transform under the chrome, rather than
+                // stretching a screenshot or re-cropping it on every surface.
+                const QRectF extended(
+                    layout.destination.topLeft() -
+                        QPointF(layout.source.x() * sx, layout.source.y() * sy),
+                    QSizeF(wallpaper.width() * sx, wallpaper.height() * sy));
+                p.drawImage(extended, wallpaper);
+            };
+            drawWallpaper(mapping.isEmpty() ? QRectF(rect()) : mapping.front());
+            for (int i = 0; i + 1 < mapping.size(); i += 2)
             {
-                const auto zoom =
-                    std::clamp(profile.wallpaperZoom, 100, 300) / 100.;
                 p.save();
-                p.scale(zoom, zoom);
-                p.drawTiledPixmap(QRectF(QPointF(), QSizeF(size()) / zoom),
-                                  QPixmap::fromImage(wallpaper));
+                p.setClipRect(mapping[i + 1]);
+                p.setOpacity(1.);
+                p.fillRect(mapping[i + 1], canvas);
+                p.setOpacity(profile.wallpaperOpacity / 100.);
+                drawWallpaper(mapping[i]);
                 p.restore();
             }
-            else
-                p.drawImage(layout.destination, wallpaper, layout.source);
             p.setOpacity(1.);
             auto overlay = profile.wallpaperOverlayColor;
             overlay.setAlphaF(overlay.alphaF() *
@@ -478,6 +618,13 @@ class ChromeEvents final : public QObject
         auto *c = layer(w);
         if (!c || c->isAncestorOf(w) || w == c->foreground)
             return false;
+        if (w == c->parentWidget())
+        {
+            if (event->type() == QEvent::Hide)
+                c->popupRefresh.stop();
+            if (event->type() == QEvent::Show && c->popupOwner)
+                c->popupRefresh.start();
+        }
         switch (event->type())
         {
             case QEvent::Resize:
@@ -492,6 +639,10 @@ class ChromeEvents final : public QObject
             case QEvent::MouseMove:
             case QEvent::MouseButtonPress:
             case QEvent::MouseButtonRelease:
+            case QEvent::KeyPress:
+            case QEvent::KeyRelease:
+            case QEvent::ActionChanged:
+            case QEvent::Wheel:
             case QEvent::LayoutRequest:
             case QEvent::PaletteChange:
                 c->request();
@@ -566,6 +717,17 @@ QJsonObject diagnostics(QWidget *window)
     result["qmlReady"] = c->status() == QQuickWidget::Ready;
     result["backdropRevision"] = c->revision;
     result["renderedFrames"] = c->frames;
+    QJsonObject baked;
+    for (const auto &name : {"glass.vert.qsb", "glass.frag.qsb"})
+    {
+        QFile file(QString(":/shaders/") + name);
+        if (file.open(QIODevice::ReadOnly))
+            baked[name] = QString::fromLatin1(
+                QCryptographicHash::hash(file.readAll(),
+                                         QCryptographicHash::Sha256)
+                    .toHex());
+    }
+    result["bakedShaderSha256"] = baked;
     return result;
 }
 }  // namespace chatterino::glass

@@ -2,7 +2,8 @@
 #pragma once
 #include "widgets/glass/GlassSkinInterface.hpp"
 namespace chatterino::glass {
-// False means the trusted bundled plugin is unavailable: use normal painting.
+// Register native control geometry with the integrated GPU material.
+// False requests normal painting when the renderer is unavailable.
 bool paint(QPainter &painter, const QRectF &rect, Surface surface,
            qreal emphasis, qreal scale);
 }

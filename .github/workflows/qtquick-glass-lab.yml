@@ -7,7 +7,9 @@ on:
       - moltorino-build-optimization-01
     paths:
       - "tools/glass-lab/**"
-      - "!tools/glass-lab/qml/GlassIntegrationPreview.qml"
+      - "!tools/glass-lab/qml/GlassChrome.qml"
+      - "!tools/glass-lab/qml/LiquidGlassPanel.qml"
+      - "!tools/glass-lab/shaders/**"
       - ".github/workflows/qtquick-glass-lab.yml"
       - ".CI/verify-glass-lab.ps1"
       - ".CI/glass-lab-checks.cpp"

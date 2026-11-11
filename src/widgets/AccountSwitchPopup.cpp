@@ -10,6 +10,7 @@
 #include "singletons/Theme.hpp"
 #include "widgets/AccountSwitchWidget.hpp"
 #include "widgets/dialogs/SettingsDialog.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 #include "widgets/helper/KickAccountSwitchWidget.hpp"
 #include "widgets/helper/MicroNotebook.hpp"
 #include "widgets/helper/TikTokAccountSwitchWidget.hpp"
@@ -112,7 +113,7 @@ void AccountSwitchPopup::themeChangedEvent()
     auto color = [](const QColor &c) {
         return c.name(QColor::HexArgb);
     };
-    this->setStyleSheet(uR"(
+    auto chromeStyle = uR"(
         QListView {
             color: %1;
             background: %2;
@@ -142,7 +143,12 @@ void AccountSwitchPopup::themeChangedEvent()
              color(t->splits.header.focusedBackground), color(t->accent),
              color(t->tabs.regular.backgrounds.regular),
              color(t->tabs.selected.backgrounds.regular),
-             color(t->window.background)));
+             color(t->window.background));
+    if (glass::enabled())
+        chromeStyle += QStringLiteral(
+            "QListView,QPushButton,chatterino--AccountSwitchPopup "
+            "{background:transparent;border:0;}");
+    this->setStyleSheet(chromeStyle);
 }
 
 void AccountSwitchPopup::refresh()
@@ -155,6 +161,8 @@ void AccountSwitchPopup::refresh()
 
 void AccountSwitchPopup::paintEvent(QPaintEvent *)
 {
+    if (glass::available(this))
+        return;
     QPainter painter(this);
 
     painter.setPen(QColor("#999"));

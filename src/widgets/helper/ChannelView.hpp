@@ -175,6 +175,9 @@ public:
     void setTransparentBackground(bool transparent);
     bool getTransparentBackground() const;
 
+    // Geometry only: the GPU chrome samples the same wallpaper mapping as chat.
+    QRectF glassWallpaperTarget() const;
+
     void setOverrideImageScale(std::optional<float> value);
     std::optional<float> getOverrideImageScale() const;
     void setVerticalOffset(int offset);
