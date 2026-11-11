@@ -123,6 +123,16 @@ SplitNotebook &Window::getNotebook()
 
 bool Window::event(QEvent *event)
 {
+    // Activation/deactivation events can still arrive while Qt is tearing
+    // down native QQuickWidget windows. The app controllers are destroyed in
+    // Application::stop(), so these handlers must not access them afterward.
+    if ((event->type() == QEvent::WindowActivate ||
+         event->type() == QEvent::WindowDeactivate) &&
+        (isAppAboutToQuit() || tryGetApp() == nullptr))
+    {
+        return QWidget::event(event);
+    }
+
     switch (event->type())
     {
         case QEvent::WindowActivate: {

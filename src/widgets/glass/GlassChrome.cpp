@@ -516,6 +516,10 @@ public:
     }
     void sync()
     {
+        // Timers queued before shutdown must not fetch Themes/Windows after
+        // Application::stop() has released their owning singletons.
+        if (isAppAboutToQuit() || !tryGetApp())
+            return;
         if (failed || !parentWidget()->isVisible())
             return;
         if (geometry() != parentWidget()->rect())
@@ -602,6 +606,10 @@ class ChromeEvents final : public QObject
 {
     bool eventFilter(QObject *object, QEvent *event) override
     {
+        // Do not install additional GPU windows or schedule material refresh
+        // while the underlying Qt application is already closing.
+        if (isAppAboutToQuit() || !tryGetApp())
+            return false;
         auto *w = qobject_cast<QWidget *>(object);
         if (!w || constructing || w->inherits("QQuickWidget") ||
             w->objectName() == "moltorinoGpuChrome")
