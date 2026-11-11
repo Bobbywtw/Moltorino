@@ -28,11 +28,21 @@ int main(int argc, char **argv)
                               QStringLiteral("file"));
     parser.addOption(baseline);
     parser.addOption(capture);
+    parser.addOption(QCommandLineOption(QStringList{QStringLiteral("width")},
+                                      QStringLiteral("Initial viewport width."),
+                                      QStringLiteral("px")));
+    parser.addOption(QCommandLineOption(QStringList{QStringLiteral("height")},
+                                      QStringLiteral("Initial viewport height."),
+                                      QStringLiteral("px")));
     parser.process(app);
 
     QQuickView view;
     view.setResizeMode(QQuickView::SizeRootObjectToView);
-    view.resize(1080, 720);
+    view.resize(parser.value(QStringLiteral("width")).isEmpty()
+                    ? 1080 : parser.value(QStringLiteral("width")).toInt(),
+                parser.value(QStringLiteral("height")).isEmpty()
+                    ? 720 : parser.value(QStringLiteral("height")).toInt());
+    view.setMinimumSize(QSize(540, 360));
     view.setTitle(QStringLiteral("Moltorino / Qt Quick GPU Glass Lab"));
     view.setColor(QColor("#192d40"));
     view.setSource(QUrl(QStringLiteral("qrc:/lab/GlassLab.qml")));

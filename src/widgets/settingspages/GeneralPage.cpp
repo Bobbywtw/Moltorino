@@ -23,6 +23,9 @@
 #include "widgets/BaseWindow.hpp"
 #include "widgets/helper/FontSettingWidget.hpp"
 #include "widgets/settingspages/GeneralPageView.hpp"
+#ifdef MOLTORINO_WITH_QTQUICK_GLASS_PREVIEW
+#    include "widgets/glass/GlassQuickPreview.hpp"
+#endif
 #include "widgets/settingspages/SettingWidget.hpp"
 
 #include <QDesktopServices>
@@ -129,6 +132,15 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     auto &s = *getSettings();
 
     layout.addTitle("Interface");
+
+#ifdef MOLTORINO_WITH_QTQUICK_GLASS_PREVIEW
+    layout.addButton("Open GPU Liquid Glass preview", [this] {
+        glass::openGlassQuickPreview(this);
+    });
+    layout.addDescription(
+        "Experimental GPU panel in a Qt Quick child window. "
+        "Only simulated messages are shown; normal chat stays intact.");
+#endif
 
     SettingWidget::checkbox("Enable experimental Liquid Glass plugin",
                             s.glassSkinEnabled)

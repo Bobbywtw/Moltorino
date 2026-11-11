@@ -1219,6 +1219,12 @@ else()
     list(APPEND SOURCE_FILES common/SecureCredentialsUnavailable.cpp)
 endif()
 
+if(MOLTORINO_GLASS_QUICK_PREVIEW)
+    list(APPEND SOURCE_FILES
+        widgets/glass/GlassQuickPreview.hpp
+        widgets/glass/GlassQuickPreview.cpp)
+endif()
+
 # Generate source groups for use in IDEs
 source_group(TREE ${CMAKE_SOURCE_DIR} FILES ${SOURCE_FILES})
 
@@ -1230,6 +1236,24 @@ set_source_files_properties(providers/moltorino/MoltorinoUpdater.cpp PROPERTIES
 )
 
 add_library(${LIBRARY_PROJECT} OBJECT ${SOURCE_FILES})
+if(MOLTORINO_GLASS_QUICK_PREVIEW)
+    target_compile_definitions(${LIBRARY_PROJECT} PRIVATE
+        MOLTORINO_WITH_QTQUICK_GLASS_PREVIEW)
+    target_link_libraries(${LIBRARY_PROJECT} PUBLIC Qt6::Quick Qt6::Qml)
+    qt_add_resources(${LIBRARY_PROJECT} "moltorino-glass-quick-qml"
+        PREFIX "/moltorino-glass"
+        BASE "${CMAKE_SOURCE_DIR}/tools/glass-lab/qml"
+        FILES
+            "${CMAKE_SOURCE_DIR}/tools/glass-lab/qml/LiquidGlassPanel.qml"
+            "${CMAKE_SOURCE_DIR}/tools/glass-lab/qml/GlassIntegrationPreview.qml")
+    qt_add_shaders(${LIBRARY_PROJECT} "moltorino-glass-quick-shaders"
+        PREFIX "/shaders"
+        BASE "${CMAKE_SOURCE_DIR}/tools/glass-lab/shaders"
+        BATCHABLE
+        FILES
+            "${CMAKE_SOURCE_DIR}/tools/glass-lab/shaders/glass.vert"
+            "${CMAKE_SOURCE_DIR}/tools/glass-lab/shaders/glass.frag")
+endif()
 if(BUILD_APP)
     add_library(moltorino-liquid-glass MODULE
         widgets/glass/LiquidGlassSkin.cpp

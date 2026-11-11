@@ -5,6 +5,7 @@ on:
     branches:
       - glass-ui-pass-01
       - liquid-glass-plugin-01
+      - liquid-glass-integration-01
   workflow_dispatch:
 
 env:
@@ -29,7 +30,7 @@ jobs:
         with:
           cache: true
           cache-key-prefix: Windows-QtCache-6.9.3-v2
-          modules: qtimageformats
+          modules: qtimageformats qtshadertools
           version: 6.9.3
 
       - name: Enable Developer Command Prompt
@@ -128,6 +129,7 @@ jobs:
               -DCHATTERINO_NIGHTLY_BUILD=Off `
               -DCHATTERINO_SPELLCHECK=On `
               -DMOLTORINO_VELOPACK=Off `
+              -DMOLTORINO_GLASS_QUICK_PREVIEW=On `
               ..
           if ($LASTEXITCODE -ne 0) { throw "CMake configuration failed" }
           # Verify real project compiler arguments before the expensive full build.
@@ -161,7 +163,7 @@ jobs:
         run: |
           New-Item -ItemType Directory Moltorino-Glass -Force | Out-Null
           Copy-Item bin/* Moltorino-Glass/ -Recurse -Exclude *.pdb
-          windeployqt Moltorino-Glass/Moltorino7.exe --release --no-compiler-runtime --no-translations --no-opengl-sw --dir Moltorino-Glass/ --force-openssl
+          windeployqt Moltorino-Glass/Moltorino7.exe --release --no-compiler-runtime --no-translations --no-opengl-sw --qmldir ../tools/glass-lab/qml --dir Moltorino-Glass/ --force-openssl
           if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
           ..\.CI\deploy-crt.ps1 Moltorino-Glass -Architecture x64
           if ($LASTEXITCODE -ne 0) { throw "CRT deployment failed" }

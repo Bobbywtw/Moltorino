@@ -17,6 +17,18 @@ Item {
     Behavior on motionX { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
     Behavior on motionY { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 
+    // Keep the entire test scene at one stable render resolution. During
+    // continuous outer-window resizing only this native scene-graph transform
+    // changes: no sourceRect or FBO reallocation of the glass composer.
+    Item {
+        id: stage
+        width: 1080
+        height: 720
+        transformOrigin: Item.TopLeft
+        scale: Math.min(root.width / width, root.height / height)
+        x: (root.width - width * scale) / 2
+        y: (root.height - height * scale) / 2
+
     // A high-contrast engineering backdrop (not a blue striped wallpaper):
     // optically recognizable details, fine lines, and mixed neutral geometry.
     // No part of glassForeground belongs to this capture layer.
@@ -142,15 +154,15 @@ Item {
         anchors.fill: parent
 
         // Separate header and refractive controls.
-        GlassPane {
+        LiquidGlassPanel {
             id: headerLens
-            x: 43; y: 28; width: root.width - 86; height: 74
+            x: 43; y: 28; width: stage.width - 86; height: 74
             backgroundLayer: appOwnedBackdrop
             active: root.glassEnabled
-            strength: root.refractionStrength
-            saturation: root.vibrancy
-            gloss: root.gloss
-            chroma: root.chromaticDispersion
+            refraction: root.refractionStrength
+            vibrancy: root.vibrancy
+            edgeLight: root.gloss
+            dispersion: root.chromaticDispersion
             motionX: root.motionX
             motionY: root.motionY
         }
@@ -164,7 +176,7 @@ Item {
         }
         Text {
             x: 228; y: 53
-            text: "GPU optics  /  signed-distance meniscus  /  build 05"
+            text: "GPU optics  /  signed-distance meniscus  /  build 06"
             color: "#e6e6e4"
             font.family: "Segoe UI"
             font.pixelSize: 14
@@ -173,7 +185,7 @@ Item {
         // Lens toggle intentionally controls only material passes: same
         // background and geometry in both states, no fake comparison.
         Rectangle {
-            x: root.width - 215; y: 44; width: 148; height: 38
+            x: stage.width - 215; y: 44; width: 148; height: 38
             radius: 19
             color: root.glassEnabled ? "#ddddda" : "#3e3e40"
             border.color: root.glassEnabled ? "#ffffff" : "#777777"
@@ -261,15 +273,15 @@ Item {
             font.pixelSize: 12
             font.letterSpacing: 2.4
         }
-        GlassPane {
+        LiquidGlassPanel {
             id: materialLens
             x: 95; y: 235; width: 614; height: 210
             backgroundLayer: appOwnedBackdrop
             active: root.glassEnabled
-            strength: root.refractionStrength
-            saturation: root.vibrancy
-            gloss: root.gloss
-            chroma: root.chromaticDispersion
+            refraction: root.refractionStrength
+            vibrancy: root.vibrancy
+            edgeLight: root.gloss
+            dispersion: root.chromaticDispersion
             motionX: root.motionX
             motionY: root.motionY
         }
@@ -329,7 +341,7 @@ Item {
         }
 
         Text {
-            x: 73; y: root.height - 170
+            x: 73; y: stage.height - 170
             text: "COMPOSER   /   LIGHT CATCH"
             font.family: "Segoe UI"
             font.pixelSize: 12
@@ -339,16 +351,16 @@ Item {
 
         // The composer is an independent material. Its bright ridge floats
         // ABOVE it rather than being a dark border painted on the pane.
-        GlassPane {
+        LiquidGlassPanel {
             id: composerLens
-            x: 61; y: root.height - 122
-            width: root.width - 122; height: 74
+            x: 61; y: stage.height - 122
+            width: stage.width - 122; height: 74
             backgroundLayer: appOwnedBackdrop
             active: root.glassEnabled
-            strength: root.refractionStrength
-            saturation: root.vibrancy
-            gloss: root.gloss
-            chroma: root.chromaticDispersion
+            refraction: root.refractionStrength
+            vibrancy: root.vibrancy
+            edgeLight: root.gloss
+            dispersion: root.chromaticDispersion
             motionX: root.motionX
             motionY: root.motionY
         }
@@ -394,5 +406,6 @@ Item {
             font.pixelSize: 12
             font.bold: true
         }
+    }
     }
 }

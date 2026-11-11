@@ -15,7 +15,9 @@ qt_add_resources(MoltorinoGlassLab "glass-lab-qml"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/qml"
     FILES
         "${CMAKE_CURRENT_SOURCE_DIR}/qml/GlassLab.qml"
-        "${CMAKE_CURRENT_SOURCE_DIR}/qml/GlassPane.qml")
+        "${CMAKE_CURRENT_SOURCE_DIR}/qml/GlassPane.qml"
+        "${CMAKE_CURRENT_SOURCE_DIR}/qml/LiquidGlassPanel.qml"
+        "${CMAKE_CURRENT_SOURCE_DIR}/qml/GlassIntegrationPreview.qml")
 
 qt_add_shaders(MoltorinoGlassLab "glass-lab-shaders"
     PREFIX "/shaders"

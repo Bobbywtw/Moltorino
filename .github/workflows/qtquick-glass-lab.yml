@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - qtquick-liquid-glass-01
+      - liquid-glass-integration-01
     paths:
       - "tools/glass-lab/**"
       - ".github/workflows/qtquick-glass-lab.yml"
@@ -59,7 +60,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Baseline capture failed' }
           & build/glass-lab-dist/MoltorinoGlassLab.exe --capture build/lab-review/glass.png
           if ($LASTEXITCODE -ne 0) { throw 'Glass capture failed' }
-          foreach ($f in @('baseline.png', 'glass.png')) {
+          & build/glass-lab-dist/MoltorinoGlassLab.exe --width 760 --height 507 --capture build/lab-review/glass-resized.png
+          if ($LASTEXITCODE -ne 0) { throw 'Resized capture failed' }
+          foreach ($f in @('baseline.png', 'glass.png', 'glass-resized.png')) {
             $path = "build/lab-review/$f"
             if (!(Test-Path $path) -or (Get-Item $path).Length -lt 5000) { throw "Missing or empty capture: $f" }
           }
