@@ -144,7 +144,7 @@ public:
                 {
                     p.local = rect;
                     p.emphasis = emphasis;
-                    emit dataChanged(index(i), index(i));
+                    Q_EMIT dataChanged(index(i), index(i));
                 }
                 return;
             }
@@ -165,7 +165,7 @@ public:
             }
         cursor = window->mapFromGlobal(QCursor::pos());
         if (!entries.isEmpty())
-            emit dataChanged(index(0), index(entries.size() - 1));
+            Q_EMIT dataChanged(index(0), index(entries.size() - 1));
     }
 };
 class Backdrop final : public QQuickImageProvider
