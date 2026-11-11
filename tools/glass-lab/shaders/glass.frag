@@ -50,9 +50,10 @@ void main()
     }
 
     float depthFromEdge = max(0.0, -signedDistance);
-    // The meniscus is a 26px shell; the middle remains optically sharp.
-    float shell = 1.0 - smoothstep(0.0, 26.0, depthFromEdge);
-    float meniscus = pow(clamp(shell, 0.0, 1.0), 3.2);
+    // A 31px meniscus shell bends the backdrop without folding it over.
+    // Softer curvature prevents the hooked duplicate lines seen in build #3.
+    float shell = 1.0 - smoothstep(0.0, 31.0, depthFromEdge);
+    float meniscus = pow(clamp(shell, 0.0, 1.0), 1.8);
 
     // Analytic outward normal for straight edges and rounded corners.
     vec2 inner = max(size * 0.5 - vec2(radius), vec2(1.0));
@@ -64,7 +65,7 @@ void main()
     // Genuine UV displacement of sampled backdrop pixels, rather than
     // merely a translucent overlay or a bright outline.
     float strength = clamp(refractionStrength, 0.0, 1.8);
-    vec2 meniscusOffset = -outward * meniscus * 16.0 * strength;
+    vec2 meniscusOffset = -outward * meniscus * 9.0 * strength;
     vec2 basePixels = uv * size + vec2(sourceInset) + parallaxPixels;
     vec2 refractedPixels = basePixels + meniscusOffset;
 

@@ -9,8 +9,9 @@ foreground's capture tree**. There is no desktop or other-window capture.
 
 - Neutral graphite scene with a detailed 24px grid, distinct concentric circles,
   sharp typography and two inherited accent colors to reveal color vibrancy
-- Rounded rectangle signed-distance meniscus with a 26px edge shell;
-  maximum displaced pixels are visibly bent at edges while the center stays crisp
+- Rounded rectangle signed-distance meniscus with a 31px edge shell;
+  refracted pixels bend along edges while the center stays crisp. Build #4
+  reduces the maximum displacement to avoid foldover at rounded corners
 - Nine-tap approximation for backdrop diffusion (not multi-pass Gaussian)
 - Saturation adjustable from 1.0 to 1.65; default 1.45 is a visual choice,
   **not a known or verifiable Apple material parameter**

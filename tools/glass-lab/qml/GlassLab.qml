@@ -237,7 +237,7 @@ Item {
         }
 
         Text {
-            x: 75; y: 204
+            x: 752; y: 211
             text: "OPTICAL TEST SURFACE"
             color: "#bcbdbb"
             font.family: "Segoe UI"

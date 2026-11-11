@@ -11,7 +11,7 @@ Item {
     property real motionY: 0.0
     property point cursorUV: Qt.point(-2, -2)
 
-    // UV displacement (up to 29px at maximum strength) and movement padding.
+    // Refraction (up to 16.2px at max strength) + parallax sampling padding.
     readonly property real inset: 44
     readonly property int textureWidth: Math.max(1, Math.ceil(width + inset * 2))
     readonly property int textureHeight: Math.max(1, Math.ceil(height + inset * 2))
