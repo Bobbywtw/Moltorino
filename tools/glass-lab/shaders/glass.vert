@@ -16,6 +16,7 @@ layout(std140, binding = 0) uniform buf {
     vec2 parallaxPixels;
     float sourceInset;
     float lensEnabled;
+    float dispersionPixels;
 };
 
 void main()

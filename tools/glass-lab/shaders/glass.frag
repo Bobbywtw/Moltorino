@@ -14,6 +14,7 @@ layout(std140, binding = 0) uniform buf {
     vec2 parallaxPixels;
     float sourceInset;
     float lensEnabled;
+    float dispersionPixels;
 };
 layout(binding = 1) uniform sampler2D source;
 
@@ -69,7 +70,19 @@ void main()
     vec2 basePixels = uv * size + vec2(sourceInset) + parallaxPixels;
     vec2 refractedPixels = basePixels + meniscusOffset;
 
-    vec3 sharp = sampleBackdrop(refractedPixels);
+    vec3 backgroundCenter = sampleBackdrop(refractedPixels);
+    vec3 sharp = backgroundCenter;
+
+    // Spectral dispersion is limited to the curved meniscus. Red and blue
+    // samples shift by less than a pixel at the default 0.65px setting;
+    // the center stays chromatically neutral and readable.
+    float chromaticWidth = clamp(dispersionPixels, 0.0, 1.25) * meniscus;
+    if (chromaticWidth > 0.001)
+    {
+        vec2 channelOffset = outward * chromaticWidth;
+        sharp.r = sampleBackdrop(refractedPixels + channelOffset).r;
+        sharp.b = sampleBackdrop(refractedPixels - channelOffset).b;
+    }
 
     // Compact nine-tap Gaussian-style diffusion; not claimed as a
     // true multi-pass Gaussian blur. Radius is within source padding.
@@ -77,7 +90,7 @@ void main()
     vec2 hx = vec2(blurRadius, 0.0);
     vec2 hy = vec2(0.0, blurRadius);
     vec3 diffusion =
-        sharp * 0.25 +
+        backgroundCenter * 0.25 +
         sampleBackdrop(refractedPixels + hx) * 0.125 +
         sampleBackdrop(refractedPixels - hx) * 0.125 +
         sampleBackdrop(refractedPixels + hy) * 0.125 +
@@ -101,21 +114,27 @@ void main()
     float innerBevel = exp(-pow((depthFromEdge - 4.8) / 3.9, 2.0));
     float innerCatch = exp(-pow((depthFromEdge - 2.0) / 2.25, 2.0));
 
-    // Cursor position affects light direction and where it gleams along rim.
+    // Per-fragment lighting: the highlight follows the cursor around the
+    // perimeter. The inward-facing normal catches light from inside the pane.
     bool pointerValid = all(greaterThanEqual(pointerUV, vec2(0.0))) &&
                         all(lessThanEqual(pointerUV, vec2(1.0)));
-    vec2 lightDir = pointerValid
-                    ? normalize(pointerUV - vec2(0.5) + vec2(0.00001))
-                    : normalize(vec2(-0.55, -0.82));
-    float faceLight = max(0.0, dot(outward, -lightDir));
-    vec2 edgePos = uv;
-    float nearCursor = pointerValid
-        ? exp(-pow(length((edgePos - pointerUV) * vec2(1.2, 1.8)) * 3.4, 2.0))
-        : 0.0;
+    vec2 virtualLightPosition = pointerValid
+                                ? pointerUV * size
+                                : size * vec2(0.12, 0.05);
+    vec2 fromEdgeToLight = virtualLightPosition - (uv * size);
+    float lightDistance = length(fromEdgeToLight);
+    vec2 toLight = fromEdgeToLight / max(lightDistance, 0.001);
+    float facingLight = pow(max(0.0, dot(-outward, toLight)), 2.5);
+    float distanceFalloff = exp(-pow(lightDistance / 135.0, 2.0));
+    float dynamicCatch = pointerValid
+                         ? facingLight * distanceFalloff : 0.0;
+    float ambientCatch = max(0.0, dot(-outward, normalize(vec2(-0.65, -0.76))));
     float gloss = clamp(specularGloss, 0.0, 3.0);
     float specular = gloss * outsideRim *
-                     (0.095 + 0.16 * pow(faceLight, 3.0) + 0.25 * nearCursor);
-    float secondaryRim = gloss * innerCatch * (0.023 + 0.042 * faceLight);
+                     (0.056 + 0.090 * pow(ambientCatch, 2.0) +
+                      0.56 * dynamicCatch);
+    float secondaryRim = gloss * innerCatch *
+                         (0.018 + 0.075 * dynamicCatch);
 
     vec3 result = transmitted * (1.0 - innerBevel * 0.17);
     result += vec3(specular + secondaryRim);

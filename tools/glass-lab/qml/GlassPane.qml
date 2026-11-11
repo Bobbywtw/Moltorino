@@ -7,6 +7,7 @@ Item {
     property real strength: 1.3
     property real saturation: 1.42
     property real gloss: 2.35
+    property real chroma: 0.65
     property real motionX: 0.0
     property real motionY: 0.0
     property point cursorUV: Qt.point(-2, -2)
@@ -41,6 +42,7 @@ Item {
         property real refractionStrength: pane.strength
         property real vibrancy: pane.saturation
         property real specularGloss: pane.gloss
+        property real dispersionPixels: pane.chroma
         property size panelSize: Qt.size(pane.width, pane.height)
         property size sourceSize: Qt.size(pane.textureWidth, pane.textureHeight)
         property point pointerUV: pane.cursorUV

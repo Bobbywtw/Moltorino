@@ -10,6 +10,7 @@ Item {
     property real refractionStrength: 1.35
     property real vibrancy: 1.45
     property real gloss: 2.35
+    property real chromaticDispersion: 0.65
     property real motionX: 0.0
     property real motionY: 0.0
 
@@ -149,6 +150,7 @@ Item {
             strength: root.refractionStrength
             saturation: root.vibrancy
             gloss: root.gloss
+            chroma: root.chromaticDispersion
             motionX: root.motionX
             motionY: root.motionY
         }
@@ -162,7 +164,7 @@ Item {
         }
         Text {
             x: 228; y: 53
-            text: "GPU optics  /  signed-distance meniscus  /  build 03"
+            text: "GPU optics  /  signed-distance meniscus  /  build 05"
             color: "#e6e6e4"
             font.family: "Segoe UI"
             font.pixelSize: 14
@@ -234,6 +236,21 @@ Item {
                     onClicked: root.gloss = root.gloss > 2.6 ? 0.7 : root.gloss + 0.35
                 }
             }
+            Rectangle {
+                width: 186; height: 36; radius: 10
+                color: "#252526"; border.color: "#646465"
+                Text {
+                    anchors.centerIn: parent
+                    text: "DISPERSION   " + root.chromaticDispersion.toFixed(2) + " px  ↗"
+                    color: "#e8e7e5"; font.pixelSize: 12; font.family: "Segoe UI"
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: root.chromaticDispersion =
+                        root.chromaticDispersion >= 1.20 ? 0.0
+                                                       : root.chromaticDispersion + 0.20
+                }
+            }
         }
 
         Text {
@@ -252,23 +269,63 @@ Item {
             strength: root.refractionStrength
             saturation: root.vibrancy
             gloss: root.gloss
+            chroma: root.chromaticDispersion
             motionX: root.motionX
             motionY: root.motionY
         }
-        Text {
-            x: 126; y: 256
-            text: "01  /  MENISCUS"
-            font.family: "Segoe UI"
-            font.pixelSize: 12
-            font.bold: true
-            color: "#ffffff"
-        }
-        Text {
-            x: 126; y: 397
-            text: "Look for bending in the grid, text and circular lines"
-            font.family: "Segoe UI"
-            font.pixelSize: 13
-            color: "#f5f5f0"
+        // Chat text and badges must be drawn AFTER the shader, as separate
+        // scene-graph nodes. The large REFRACTION lettering belongs to the
+        // background and bends intentionally; this overlay never bends.
+        Item {
+            id: unwarpedForeground
+            x: materialLens.x
+            y: materialLens.y
+            width: materialLens.width
+            height: materialLens.height
+            z: 10
+
+            Text {
+                x: 31; y: 21
+                text: "01  /  MENISCUS  •  TEXT ISOLATION"
+                font.family: "Segoe UI"
+                font.pixelSize: 12
+                font.bold: true
+                color: "#ffffff"
+            }
+            Row {
+                x: 31; y: 66; spacing: 8
+                Rectangle {
+                    width: 21; height: 21; radius: 5
+                    color: "#c6e7c9"
+                    Text {
+                        anchors.centerIn: parent
+                        text: "✓"
+                        color: "#243729"
+                        font.pixelSize: 15
+                        font.bold: true
+                    }
+                }
+                Text {
+                    text: "chat-user"
+                    font.family: "Segoe UI"
+                    font.pixelSize: 16
+                    font.bold: true
+                    color: "#e4c1ff"
+                }
+                Text {
+                    text: " : Text and badges stay sharp."
+                    font.family: "Segoe UI"
+                    font.pixelSize: 16
+                    color: "#ffffff"
+                }
+            }
+            Text {
+                x: 31; y: 165
+                text: "Look for bending in the BACKDROP grid, lettering and circular lines"
+                font.family: "Segoe UI"
+                font.pixelSize: 13
+                color: "#f5f5f0"
+            }
         }
 
         Text {
@@ -291,6 +348,7 @@ Item {
             strength: root.refractionStrength
             saturation: root.vibrancy
             gloss: root.gloss
+            chroma: root.chromaticDispersion
             motionX: root.motionX
             motionY: root.motionY
         }
