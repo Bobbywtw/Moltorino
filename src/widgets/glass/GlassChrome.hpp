@@ -6,6 +6,8 @@ class QWidget;
 namespace chatterino::glass {
 // Application-owned backdrop only; never reads the desktop or account storage.
 void installChrome();
+// Explicitly tear down QQuickWidget scene graphs before QApplication quits.
+void shutdownChrome();
 bool enabled();
 bool available(const QWidget *widget);
 bool surface(QWidget *widget, const QRectF &rect, const char *kind,

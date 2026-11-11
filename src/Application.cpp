@@ -83,6 +83,7 @@
 #include "util/Helpers.hpp"
 #include "util/MemoryReclaimer.hpp"
 #include "util/PostToThread.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 #include "widgets/Notebook.hpp"
 #include "widgets/splits/Split.hpp"
 #include "widgets/Window.hpp"
@@ -877,6 +878,11 @@ void Application::aboutToQuit()
     getMoltorinoUpdater()->prepareForApplicationQuit();
 
     this->windows->closeAll();
+
+    // QtWidgets main windows are not destroyed by closeAll(). Stop all
+    // QQuickWidget renderers before Application::stop() releases controllers
+    // and before QGuiApplication destroys its graphics infrastructure.
+    glass::shutdownChrome();
 }
 
 void Application::stop()

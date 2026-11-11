@@ -670,6 +670,15 @@ bool enabled()
     return false;
 #    endif
 }
+void shutdownChrome()
+{
+    // Main Moltorino windows aren't WA_DeleteOnClose. Release GPU resources
+    // deterministically while Qt Quick/Gui are still initialized, instead
+    // of leaving QQuickWidgets alive until QApplication destruction.
+    const auto active = layers;
+    for (auto *chrome : active)
+        delete chrome;  // ~Chrome() removes itself from layers.
+}
 void installChrome()
 {
     if (!enabled())
@@ -742,6 +751,9 @@ QJsonObject diagnostics(QWidget *window)
 
 #else
 namespace chatterino::glass {
+void shutdownChrome()
+{
+}
 void installChrome()
 {
 }
