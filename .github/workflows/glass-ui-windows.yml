@@ -169,6 +169,13 @@ jobs:
           7z a Moltorino-Windows.zip Moltorino-Glass/
           if ($LASTEXITCODE -ne 0) { throw "ZIP creation failed" }
 
+      - name: Prepare native crash diagnostics
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory build/diagnostics -Force | Out-Null
+          cl.exe /nologo /EHsc /std:c++20 /MT .CI/debug-windows-startup.cpp /Febuild/diagnostics/debug-windows-startup.exe /Fobuild/diagnostics/debug-windows-startup.obj /link dbghelp.lib
+          if ($LASTEXITCODE -ne 0) { throw "Cannot build native startup diagnostics" }
+
       - name: Verify Windows package
         working-directory: build
         shell: pwsh
@@ -206,6 +213,16 @@ jobs:
           }
           Pop-Location
           ..\.CI\verify-glass-ui.ps1 -PackageDirectory $packageDir -ReviewDirectory (Join-Path $env:GITHUB_WORKSPACE 'build/ui-review')
+
+      - name: Upload startup diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: Moltorino-Startup-Diagnostics
+          path: build/ui-review/
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 14
 
       - name: Upload native UI review
         uses: actions/upload-artifact@v7

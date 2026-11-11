@@ -15,7 +15,19 @@ function Invoke-Package([string[]] $Arguments) {
         $process.Kill()
         throw "Moltorino launch timed out: $Arguments"
     }
-    if ($process.ExitCode -ne 0) { throw "Moltorino failed: $Arguments ($($process.ExitCode))" }
+    if ($process.ExitCode -ne 0) {
+        if ($env:CHATTERINO_LOG_TO_FILE -and (Test-Path $env:CHATTERINO_LOG_TO_FILE)) {
+            Get-Content $env:CHATTERINO_LOG_TO_FILE -Tail 100
+        }
+        if ($process.ExitCode -eq 11) {
+            $debugger = Join-Path $env:GITHUB_WORKSPACE 'build/diagnostics/debug-windows-startup.exe'
+            & $debugger $exe (Join-Path $env:GITHUB_WORKSPACE 'build/bin')
+            if ($env:CHATTERINO_LOG_TO_FILE -and (Test-Path $env:CHATTERINO_LOG_TO_FILE)) {
+                Get-Content $env:CHATTERINO_LOG_TO_FILE -Tail 100
+            }
+        }
+        throw "Moltorino failed: $Arguments ($($process.ExitCode))"
+    }
 }
 Invoke-Package @('--moltorino-release-identity')
 $identityPath = Join-Path $PackageDirectory '.moltorino-release-identity-probe.json'
@@ -38,6 +50,8 @@ foreach ($theme in @('Dark', 'Glass', 'Moltorino Midnight')) {
     $profile | ConvertTo-Json -Depth 8 | Set-Content $settingsFile -Encoding utf8
     $before = (Get-FileHash $settingsFile).Hash
     $env:MOLTORINO_UI_REVIEW_DIR = Join-Path $ReviewDirectory $theme
+    New-Item -ItemType Directory -Path $env:MOLTORINO_UI_REVIEW_DIR -Force | Out-Null
+    $env:CHATTERINO_LOG_TO_FILE = Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'startup.log'
     Invoke-Package @('--verbose')
     if ((Get-FileHash $settingsFile).Hash -ne $before) { throw "UI review modified the existing $theme settings fixture" }
     foreach ($capture in @('chat.png', 'menu.png')) {
@@ -46,3 +60,4 @@ foreach ($theme in @('Dark', 'Glass', 'Moltorino Midnight')) {
     Write-Output "Existing $theme profile loaded; settings unchanged; native widget captures saved."
 }
 Remove-Item Env:MOLTORINO_UI_REVIEW_DIR
+Remove-Item Env:CHATTERINO_LOG_TO_FILE
