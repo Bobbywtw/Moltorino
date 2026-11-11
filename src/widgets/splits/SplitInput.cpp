@@ -1954,10 +1954,11 @@ void SplitInput::initLayout()
 
     auto textEdit =
         hboxLayout.emplace<ResizingTextEdit>().assign(&this->ui_.textEdit);
+    // Changing the margin emits textChanged; dependent labels are built below.
+    textEdit->document()->setDocumentMargin(0);
     connect(textEdit.getElement(), &ResizingTextEdit::textChanged, this,
             &SplitInput::editTextChanged);
     textEdit->setFrameStyle(QFrame::NoFrame);
-    textEdit->document()->setDocumentMargin(0);
     this->ui_.inputHbox->setStretch(0, 1);
 
     auto *shortcutFilter = new CmdDeleteKeyFilter(this);
