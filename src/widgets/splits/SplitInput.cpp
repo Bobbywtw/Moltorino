@@ -302,7 +302,8 @@ protected:
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing);
         if (!glass::surface(this, this->rect(), "reply"))
-            painter.fillRect(this->rect(), this->theme->splits.input.background);
+            painter.fillRect(this->rect(),
+                             this->theme->splits.input.background);
 
         auto *model = this->model_.data();
         if (model == nullptr || this->emoteRows_.empty())

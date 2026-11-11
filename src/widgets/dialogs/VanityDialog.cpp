@@ -7,13 +7,12 @@
 #include "messages/Image.hpp"
 #include "providers/badgehq/BadgeHQBadges.hpp"
 #include "providers/bluzyrino/BluzyrinoBadges.hpp"
-#include "providers/jilchat/JilChatBadges.hpp"
-#include "providers/wydios/WydiosBadges.hpp"
 #include "providers/bttv/BttvBadges.hpp"
 #include "providers/chatterino/ChatterinoBadges.hpp"
 #include "providers/ffz/FfzBadges.hpp"
 #include "providers/ffzap/FfzApBadges.hpp"
 #include "providers/homies/HomiesBadges.hpp"
+#include "providers/jilchat/JilChatBadges.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/seventv/SeventvPaints.hpp"
@@ -22,12 +21,14 @@
 #include "providers/twitch/TwitchBadge.hpp"
 #include "providers/twitch/TwitchBadges.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
+#include "providers/wydios/WydiosBadges.hpp"
 #include "singletons/Fonts.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
 #include "widgets/buttons/Button.hpp"
 #include "widgets/buttons/SvgButton.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 #include "widgets/helper/Line.hpp"
 
 #include <QAbstractButton>
@@ -78,8 +79,8 @@
 #include <cmath>
 #include <functional>
 #include <limits>
-#include <utility>
 #include <unordered_set>
+#include <utility>
 
 namespace chatterino {
 
@@ -608,7 +609,8 @@ protected:
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing);
         painter.setRenderHint(QPainter::SmoothPixmapTransform);
-        painter.fillRect(this->rect(), getTheme()->splits.input.background);
+        if (!glass::surface(this, this->rect(), "reply"))
+            painter.fillRect(this->rect(), getTheme()->splits.input.background);
 
         const int baseBadgeSize = qRound(22 * this->uiScale_);
         const int baseSpacing = qRound(3 * this->uiScale_);
@@ -1184,6 +1186,8 @@ protected:
         {
             background = getTheme()->splits.header.background;
         }
+        if (glass::surface(this, this->rect(), "reply"))
+            background.setAlpha(65);
         painter.fillRect(QRect(0, 0, width, height), background);
         QPen tileBorder(this->isChecked() ? accent : border,
                         this->isChecked() ? 2 : 1);
@@ -1717,6 +1721,8 @@ public:
         {
             background = getTheme()->splits.header.background;
         }
+        if (glass::available(option.widget))
+            background.setAlpha(75);
         painter->fillRect(option.rect, background);
 
         auto text =

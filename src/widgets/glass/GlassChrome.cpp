@@ -14,6 +14,7 @@
 #    include "widgets/dialogs/SettingsDialog.hpp"
 #    include "widgets/helper/ChannelView.hpp"
 #    include "widgets/helper/NotebookTab.hpp"
+#    include "widgets/Label.hpp"
 #    include "widgets/splits/Split.hpp"
 
 #    include <QAbstractButton>
@@ -28,11 +29,12 @@
 #    include <QFile>
 #    include <QImage>
 #    include <QJsonArray>
-#    include <QLineEdit>
 #    include <QLabel>
+#    include <QLineEdit>
 #    include <QMenu>
 #    include <QMouseEvent>
 #    include <QPainter>
+#    include <QPlainTextEdit>
 #    include <QPointer>
 #    include <QQmlContext>
 #    include <QQmlEngine>
@@ -202,25 +204,41 @@ bool settingsWindow(const QWidget *window)
 // Only dark opaque stylesheet fills become readable translucent panels.
 QString panelStyles(QString sheet)
 {
-    static const QRegularExpression fills(
-        QStringLiteral("(?<![-\\w])background(?:-color)?\\s*:\\s*(#[0-9a-fA-F]{3,8})\\s*;"));
+    static const QRegularExpression fills(QStringLiteral(
+        "(?<![-\\w])background(?:-color)?\\s*:\\s*(#[0-9a-fA-F]{3,8})\\s*;"));
+    static const QRegularExpression semantic(
+        QStringLiteral(
+            "Swatch|ColorPreview|ColorPicker|Badge|Progress|Indicator"),
+        QRegularExpression::CaseInsensitiveOption);
     auto matches = fills.globalMatch(sheet);
-    QList<QPair<int, QPair<int, QString>>> replacements;
+    struct Replacement {
+        qsizetype start;
+        qsizetype length;
+        QString color;
+    };
+    QList<Replacement> replacements;
     while (matches.hasNext())
     {
         const auto match = matches.next();
+        const auto open = sheet.lastIndexOf('{', match.capturedStart());
+        const auto previous = sheet.lastIndexOf('}', open);
+        if (semantic.match(sheet.mid(previous + 1, open - previous - 1))
+                .hasMatch())
+            continue;
         QColor color(match.captured(1));
-        if (!color.isValid() || color.alpha() < 240 || color.lightnessF() > 0.3)
+        if (!color.isValid() || color.alpha() < 240 ||
+            color.lightnessF() > 0.3 || color.hsvSaturationF() > 0.25)
             continue;
         color.setAlpha(85);
-        replacements.append({int(match.capturedStart(1)),
-                             {int(match.capturedLength(1)),
-                              QString("rgba(%1,%2,%3,%4)")
-                                  .arg(color.red()).arg(color.green())
-                                  .arg(color.blue()).arg(color.alpha())}});
+        replacements.append({match.capturedStart(1), match.capturedLength(1),
+                             QString("rgba(%1,%2,%3,%4)")
+                                 .arg(color.red())
+                                 .arg(color.green())
+                                 .arg(color.blue())
+                                 .arg(color.alpha())});
     }
     for (auto i = replacements.crbegin(); i != replacements.crend(); ++i)
-        sheet.replace(i->first, i->second.first, i->second.second);
+        sheet.replace(i->start, i->length, i->color);
     return sheet;
 }
 
@@ -291,8 +309,7 @@ public:
     {
         // Popovers refract only pixels of their owning Moltorino window.
         // This capture stays in memory, is never saved, and never reads the desktop.
-        if (!parent->inherits("chatterino::Window") &&
-            !settingsWindow(parent))
+        if (!parent->inherits("chatterino::Window") && !settingsWindow(parent))
         {
             ownedPopup = true;
         }
@@ -309,8 +326,8 @@ public:
             // its transient owner rather than capturing the popup itself.
             if ((!owner || owner == parent) && parent->windowHandle() &&
                 parent->windowHandle()->transientParent())
-                owner = QWidget::find(parent->windowHandle()
-                                          ->transientParent()->winId());
+                owner = QWidget::find(
+                    parent->windowHandle()->transientParent()->winId());
             if (!owner || owner == parent)
                 for (auto *candidate : QApplication::topLevelWidgets())
                     if (candidate != parent && candidate->isVisible() &&
@@ -460,7 +477,7 @@ public:
             parentWidget()->setStyleSheet(
                 parentWidget()->styleSheet() +
                 QString("QMenu,QToolTip,QPushButton,QToolButton,QLineEdit,"
-                        "QComboBox {background:%1;}")
+                        "QComboBox,QTextEdit,QPlainTextEdit {background:%1;}")
                     .arg(bg));
             parentWidget()->update();
         });
@@ -533,9 +550,10 @@ public:
                                 : getTheme()->window.background;
         image.fill(canvas);
         QPainter p(&image);
-        auto wallpaper = ownedPopup || profile.wallpaperSource.isEmpty() || video
-                             ? QImage()
-                             : loadThemeWallpaper(profile.wallpaperSource);
+        auto wallpaper =
+            ownedPopup || profile.wallpaperSource.isEmpty() || video
+                ? QImage()
+                : loadThemeWallpaper(profile.wallpaperSource);
         if (!wallpaper.isNull())
             wallpaper =
                 blurThemeWallpaper(std::move(wallpaper), profile.wallpaperBlur);
@@ -642,8 +660,6 @@ public:
             if (w->window() != parentWidget() || !w->isVisible() || w == this ||
                 w == foreground || isAncestorOf(w))
                 continue;
-            if (settings)
-                continue;
             // ChannelView owns native chat text, fonts, colors and badges.
             // Popout histories use the GPU shell's mapped owner backdrop.
             if (auto *view = dynamic_cast<ChannelView *>(w))
@@ -661,6 +677,20 @@ public:
                 if (dynamic_cast<ChannelView *>(p))
                     chatChild = true;
             if (chatChild)
+                continue;
+            if (auto *label = qobject_cast<QLabel *>(w))
+            {
+                auto font = label->font();
+                if (font.weight() < QFont::DemiBold)
+                {
+                    font.setWeight(QFont::DemiBold);
+                    label->setFont(font);
+                }
+            }
+            if (auto *label = dynamic_cast<Label *>(w);
+                label && label->getFontStyle() == FontStyle::UiMedium)
+                label->setFontStyle(FontStyle::UiMediumBold);
+            if (settings)
                 continue;
             // Clear inherited opaque palette fills only where a real GPU
             // layer is available. Do not modify semantic palette colors.
@@ -681,15 +711,6 @@ public:
                 styled[w] = {current, material};
                 if (material != current)
                     w->setStyleSheet(material);
-            }
-            if (auto *label = qobject_cast<QLabel *>(w))
-            {
-                auto font = label->font();
-                if (font.weight() < QFont::DemiBold)
-                {
-                    font.setWeight(QFont::DemiBold);
-                    label->setFont(font);
-                }
             }
             if (auto *tabs = qobject_cast<QTabBar *>(w))
             {
@@ -721,7 +742,8 @@ public:
             }
             else if (qobject_cast<QLineEdit *>(w) ||
                      qobject_cast<QComboBox *>(w) ||
-                     qobject_cast<QTextEdit *>(w))
+                     qobject_cast<QTextEdit *>(w) ||
+                     qobject_cast<QPlainTextEdit *>(w))
             {
                 panels.put(w, QRectF(w->rect()).adjusted(1, 1, -1, -1), "field",
                            w->hasFocus() ? 1. : 0.);
@@ -774,9 +796,8 @@ class ChromeEvents final : public QObject
             event->type() == QEvent::Resize || event->type() == QEvent::Show ||
             event->type() == QEvent::Hide)
             for (auto *popup : layers)
-                if (!popup->capturing &&
-                    (popup->popupOwner == w->window() ||
-                     popup->parentWidget() == w))
+                if (!popup->capturing && (popup->popupOwner == w->window() ||
+                                          popup->parentWidget() == w))
                     popup->popupDirty = true;
         if (event->type() == QEvent::Show && w->isWindow() && !layer(w) &&
             !w->inherits("QDesktopWidget") &&
@@ -898,7 +919,8 @@ QJsonObject diagnostics(QWidget *window)
     result["qmlReady"] = c->status() == QQuickWidget::Ready;
     result["backdropRevision"] = c->revision;
     result["renderedFrames"] = c->frames.load();
-    result["backdropSource"] = c->ownedPopup ? "owner-window" : "chat-wallpaper";
+    result["backdropSource"] =
+        c->ownedPopup ? "owner-window" : "chat-wallpaper";
     result["ownerCaptureValid"] = !c->popupBackdrop.isNull();
     result["settingsControlsPreserved"] = settingsWindow(window);
     QJsonObject baked;

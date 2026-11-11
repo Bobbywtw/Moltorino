@@ -1041,6 +1041,7 @@ void Theme::parseFrom(const QJsonObject &root, bool isCustomTheme)
             "QToolButton[liquidGlassSurface=true],"
             "QLineEdit[liquidGlassSurface=true], "
             "QTextEdit[liquidGlassSurface=true], "
+            "QPlainTextEdit[liquidGlassSurface=true], "
             "QComboBox[liquidGlassSurface=true]"
             " { background: transparent; border: 0; }");
     }

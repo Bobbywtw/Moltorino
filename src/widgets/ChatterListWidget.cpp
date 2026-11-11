@@ -1114,11 +1114,12 @@ public:
             background = this->hover_;
         }
         if (glass::available(option.widget))
-            background.setAlpha(kind == RowKind::User &&
-                                        (option.state & (QStyle::State_Selected |
-                                                         QStyle::State_MouseOver))
-                                    ? 110
-                                    : 45);
+            background.setAlpha(
+                kind == RowKind::User &&
+                        (option.state &
+                         (QStyle::State_Selected | QStyle::State_MouseOver))
+                    ? 110
+                    : 45);
         painter->fillRect(option.rect, background);
 
         const auto padding = qRound(8 * this->scale_);
