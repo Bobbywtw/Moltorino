@@ -1,17 +1,23 @@
-name: Moltorino Qt Quick Glass Lab
+name: Moltorino Fast Glass Checks
 on:
   push:
     branches:
       - qtquick-liquid-glass-01
       - liquid-glass-integration-01
+      - moltorino-build-optimization-01
     paths:
       - "tools/glass-lab/**"
       - ".github/workflows/qtquick-glass-lab.yml"
+      - ".CI/verify-glass-lab.ps1"
+      - ".CI/glass-lab-checks.cpp"
+      - ".CI/reuse-composer-package.ps1"
+      - "src/widgets/splits/SplitInput.*"
+      - "src/widgets/helper/ResizingTextEdit.*"
   workflow_dispatch:
 
 jobs:
   shader-preview-windows:
-    name: Compile GPU shader and capture on Windows
+    name: QML, QSB, GPU and composer checks
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v6
@@ -23,9 +29,9 @@ jobs:
         uses: jurplel/install-qt-action@v4.3.1
         with:
           version: 6.9.3
-          modules: qtshadertools
+          modules: qtimageformats qtshadertools
           cache: true
-          cache-key-prefix: Moltorino-QtQuick-Shader-Lab-v1
+          cache-key-prefix: Windows-QtCache-6.9.3-v2
 
       - name: Enable MSVC compiler
         uses: Chatterino/msvc-dev-cmd@v2.0.5
@@ -49,30 +55,53 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path build/glass-lab-dist -Force | Out-Null
           Copy-Item build/glass-lab/MoltorinoGlassLab.exe build/glass-lab-dist/
+          Copy-Item build/glass-lab/MoltorinoGlassChecks.exe build/glass-lab-dist/
           windeployqt build/glass-lab-dist/MoltorinoGlassLab.exe --release --qmldir tools/glass-lab/qml --dir build/glass-lab-dist --no-compiler-runtime
           if ($LASTEXITCODE -ne 0) { throw 'Qt deployment failed' }
 
-      - name: Capture actual Qt Quick rendering
+      - name: Validate QML components and actual GPU rendering
         shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path build/lab-review -Force | Out-Null
-          & build/glass-lab-dist/MoltorinoGlassLab.exe --baseline --capture build/lab-review/baseline.png
-          if ($LASTEXITCODE -ne 0) { throw 'Baseline capture failed' }
-          & build/glass-lab-dist/MoltorinoGlassLab.exe --capture build/lab-review/glass.png
-          if ($LASTEXITCODE -ne 0) { throw 'Glass capture failed' }
-          & build/glass-lab-dist/MoltorinoGlassLab.exe --width 760 --height 507 --capture build/lab-review/glass-resized.png
-          if ($LASTEXITCODE -ne 0) { throw 'Resized capture failed' }
-          foreach ($f in @('baseline.png', 'glass.png', 'glass-resized.png')) {
-            $path = "build/lab-review/$f"
-            if (!(Test-Path $path) -or (Get-Item $path).Length -lt 5000) { throw "Missing or empty capture: $f" }
-          }
+        run: .\.CI\verify-glass-lab.ps1 -BuildDirectory build/glass-lab-dist
+
+      - name: Locate a compatible verified application
+        id: verified-app
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .\.CI\reuse-composer-package.ps1 Resolve
+
+      - name: Download full-build provenance
+        if: steps.verified-app.outputs.run_id != ''
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: Moltorino-Build-Metadata
+          run-id: ${{ steps.verified-app.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: build/reusable-package/metadata
+
+      - name: Download verified executable
+        if: steps.verified-app.outputs.run_id != ''
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: Moltorino-Windows
+          run-id: ${{ steps.verified-app.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: build/reusable-package/package
+
+      - name: Verify actual resized composer without recompiling the app
+        if: steps.verified-app.outputs.run_id != ''
+        shell: pwsh
+        env:
+          VERIFIED_RUN_ID: ${{ steps.verified-app.outputs.run_id }}
+          VERIFIED_SOURCE_COMMIT: ${{ steps.verified-app.outputs.source_commit }}
+        run: .\.CI\reuse-composer-package.ps1 Verify
 
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: Moltorino-GPU-Glass-Lab-Review
-          path: build/lab-review/*.png
+          path: build/lab-review/
           if-no-files-found: ignore
           retention-days: 14
 

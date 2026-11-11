@@ -10,7 +10,15 @@ find_package(Qt6 6.9 REQUIRED COMPONENTS Core Gui Quick Qml ShaderTools)
 qt_add_executable(MoltorinoGlassLab main.cpp)
 target_link_libraries(MoltorinoGlassLab PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml)
 
-qt_add_resources(MoltorinoGlassLab "glass-lab-qml"
+qt_add_executable(MoltorinoGlassChecks ../../.CI/glass-lab-checks.cpp)
+target_link_libraries(MoltorinoGlassChecks PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml)
+
+# Compile each QSB/resource once; link the same real resources into both tools.
+add_library(GlassLabResources OBJECT)
+target_link_libraries(GlassLabResources PRIVATE Qt6::Core)
+target_link_libraries(MoltorinoGlassLab PRIVATE GlassLabResources)
+target_link_libraries(MoltorinoGlassChecks PRIVATE GlassLabResources)
+qt_add_resources(GlassLabResources "glass-lab-qml"
     PREFIX "/lab"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/qml"
     FILES
@@ -19,7 +27,7 @@ qt_add_resources(MoltorinoGlassLab "glass-lab-qml"
         "${CMAKE_CURRENT_SOURCE_DIR}/qml/LiquidGlassPanel.qml"
         "${CMAKE_CURRENT_SOURCE_DIR}/qml/GlassIntegrationPreview.qml")
 
-qt_add_shaders(MoltorinoGlassLab "glass-lab-shaders"
+qt_add_shaders(GlassLabResources "glass-lab-shaders"
     PREFIX "/shaders"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
     BATCHABLE
