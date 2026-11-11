@@ -20,6 +20,9 @@ set(SOURCE_FILES
         BrowserExtension.hpp
         RunGui.cpp
         RunGui.hpp
+        widgets/glass/GlassSkinInterface.hpp
+        widgets/glass/GlassSkinHost.hpp
+        widgets/glass/GlassSkinHost.cpp
 
         common/AccountCredentials.cpp
         common/AccountCredentials.hpp
@@ -1227,6 +1230,22 @@ set_source_files_properties(providers/moltorino/MoltorinoUpdater.cpp PROPERTIES
 )
 
 add_library(${LIBRARY_PROJECT} OBJECT ${SOURCE_FILES})
+if(BUILD_APP)
+    add_library(moltorino-liquid-glass MODULE
+        widgets/glass/LiquidGlassSkin.cpp
+        widgets/glass/GlassSkinInterface.hpp)
+    target_include_directories(moltorino-liquid-glass PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(moltorino-liquid-glass PRIVATE
+        Qt${MAJOR_QT_VERSION}::Widgets)
+    set_target_properties(moltorino-liquid-glass PROPERTIES
+        AUTOMOC ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/glass"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/glass"
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin/glass"
+        RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}/bin/glass"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/glass")
+endif()
 add_library(moltorino-tiktok-login STATIC
     ../lib/quirc/quirc.c
     ../lib/quirc/decode.c

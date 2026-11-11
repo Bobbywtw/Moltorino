@@ -48,6 +48,7 @@
 #include "widgets/dialogs/SettingsDialog.hpp"
 #include "widgets/helper/AutoModReviewBar.hpp"
 #include "widgets/helper/ChannelView.hpp"
+#include "widgets/glass/GlassSkinHost.hpp"
 #include "widgets/helper/CommonTexts.hpp"
 #include "widgets/Label.hpp"
 #include "widgets/splits/Split.hpp"
@@ -2400,8 +2401,14 @@ void SplitHeader::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
     const auto &ui = uiPalette(this->theme->isLightTheme());
-    painter.fillRect(this->rect(), ui.surface);
-    painter.fillRect(0, this->height() - 1, this->width(), 1, ui.border);
+    if (!(getSettings()->glassSkinEnabled &&
+          glass::paint(painter, QRectF(this->rect()),
+                       glass::Surface::ChannelHeader,
+                       this->split_->hasFocus() ? 1.0 : 0.0, this->scale())))
+    {
+        painter.fillRect(this->rect(), ui.surface);
+        painter.fillRect(0, this->height() - 1, this->width(), 1, ui.border);
+    }
     if (this->split_->hasFocus())
     {
         painter.fillRect(

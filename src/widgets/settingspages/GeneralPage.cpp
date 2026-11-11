@@ -130,6 +130,12 @@ void GeneralPage::initLayout(GeneralPageView &layout)
 
     layout.addTitle("Interface");
 
+    SettingWidget::checkbox("Enable experimental Liquid Glass plugin",
+                            s.glassSkinEnabled)
+        ->setTooltip("Optional bundled Qt appearance module. Turn it off "
+                     "to immediately restore the standard UI.")
+        ->addTo(layout);
+
     {
         auto *themes = getApp()->getThemes();
 

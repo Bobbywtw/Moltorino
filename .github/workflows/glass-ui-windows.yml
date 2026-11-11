@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - glass-ui-pass-01
+      - liquid-glass-plugin-01
   workflow_dispatch:
 
 env:
@@ -186,6 +187,7 @@ jobs:
           foreach ($file in @('Moltorino7.exe', 'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Widgets.dll', 'Qt6Network.dll', 'Qt6Sql.dll', 'platforms/qwindows.dll', 'sqldrivers/qsqlite.dll', 'tls/qopensslbackend.dll', 'libssl-3-x64.dll', 'libcrypto-3-x64.dll', 'support/media/ffmpeg.exe', 'support/media/ffprobe.exe', 'support/7zip/7z.exe', 'support/7zip/7z.dll')) {
             if (!(Test-Path (Join-Path $packageDir $file))) { throw "Missing portable file: $file" }
           }
+          if (!(Test-Path (Join-Path $packageDir 'glass/moltorino-liquid-glass.dll'))) { throw "Missing native glass plugin DLL" }
           # Each executable must resolve its VC runtime without a system install.
           foreach ($executable in Get-ChildItem $packageDir -Recurse -Filter *.exe) {
             $imports = & dumpbin /DEPENDENTS $executable.FullName

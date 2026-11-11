@@ -55,6 +55,7 @@
 #include "widgets/helper/ChannelView.hpp"
 #include "widgets/helper/CmdDeleteKeyFilter.hpp"
 #include "widgets/helper/MessageView.hpp"
+#include "widgets/glass/GlassSkinHost.hpp"
 #include "widgets/helper/ResizingTextEdit.hpp"
 #include "widgets/Notebook.hpp"
 #include "widgets/Scrollbar.hpp"
@@ -1205,6 +1206,13 @@ SplitInput::SplitInput(QWidget *parent, Split *_chatWidget,
         this->hideCompletionPopup();
         this->resetCommandCompletionSession();
     });
+    getSettings()->glassSkinEnabled.connect(
+        [this](const bool, auto) {
+            this->updateEmoteButton();
+            this->relayoutParentWidgets();
+            this->update();
+        },
+        this->managedConnections_);
     this->scaleChangedEvent(this->scale());
     this->signalHolder_.managedConnect(getApp()->getHotkeys()->onItemsUpdated,
                                        [this]() {
@@ -2404,10 +2412,13 @@ void SplitInput::themeChangedEvent()
 void SplitInput::updateEmoteButton()
 {
     auto scale = this->scale();
+    const bool enabled = getSettings()->glassSkinEnabled;
+    const int x = enabled ? 6 : 8;
+    const int y = enabled ? 4 : 6;
     this->ui_.inputWrapper->setContentsMargins(
-        int(std::round(8 * scale)), int(std::round(6 * scale)),
-        int(std::round(8 * scale)), int(std::round(6 * scale)));
-    auto buttonSize = int(std::round(24 * scale));
+        int(std::round(x * scale)), int(std::round(y * scale)),
+        int(std::round(x * scale)), int(std::round(y * scale)));
+    auto buttonSize = int(std::round((enabled ? 20 : 24) * scale));
     auto labelBottomInset = int(std::round(1 * scale));
 
     this->ui_.emoteButton->setFixedSize(buttonSize, buttonSize);
@@ -4998,10 +5009,15 @@ void SplitInput::paintEvent(QPaintEvent *)
     painter.fillRect(this->rect(), this->theme->splits.background);
     painter.setRenderHint(QPainter::Antialiasing);
     const QRectF input(this->ui_.inputWrapper->geometry());
-    painter.setBrush(this->backgroundColor());
-    painter.setPen(QPen(uiMix(ui.border, ui.focus, this->focusProgress_), 1));
-    painter.drawRoundedRect(input.adjusted(0.5, 0.5, -0.5, -0.5),
-                            6 * this->scale(), 6 * this->scale());
+    if (!(getSettings()->glassSkinEnabled &&
+          glass::paint(painter, input, glass::Surface::Composer,
+                       this->focusProgress_, this->scale())))
+    {
+        painter.setBrush(this->backgroundColor());
+        painter.setPen(QPen(uiMix(ui.border, ui.focus, this->focusProgress_), 1));
+        painter.drawRoundedRect(input.adjusted(0.5, 0.5, -0.5, -0.5),
+                                6 * this->scale(), 6 * this->scale());
+    }
     if (this->enableInlineReplying_ && this->replyTarget_ != nullptr)
     {
         const QRectF reply(this->ui_.replyWrapper->geometry());

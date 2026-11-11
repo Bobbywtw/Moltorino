@@ -21,6 +21,7 @@
 #include "widgets/dialogs/MoltorinoDialogTheme.hpp"
 #include "widgets/dialogs/SettingsDialog.hpp"
 #include "widgets/Notebook.hpp"
+#include "widgets/glass/GlassSkinHost.hpp"
 #include "widgets/splits/DraggedSplit.hpp"
 #include "widgets/splits/Split.hpp"
 #include "widgets/splits/SplitContainer.hpp"
@@ -1709,7 +1710,12 @@ void NotebookTab::paintEvent(QPaintEvent *)
                           individual || this->isFirstVisible_,
                           individual || this->isLastVisible_);
     painter.setRenderHint(QPainter::Antialiasing, tabRadius > 0);
-    painter.fillPath(backgroundPath, tabBackground);
+    if (!(getSettings()->glassSkinEnabled &&
+          glass::paint(painter, shapedRect, glass::Surface::Tab,
+                       this->selected_ ? 1.0 : this->hoverProgress(), scale)))
+    {
+        painter.fillPath(backgroundPath, tabBackground);
+    }
 
     QColor groupTint;
     if (this->role_ == Role::GroupHeader && this->groupColorMode_ == "theme")

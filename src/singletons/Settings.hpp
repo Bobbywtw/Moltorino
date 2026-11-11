@@ -212,6 +212,7 @@ public:
     BoolSetting windowTopMost = {"/appearance/windowAlwaysOnTop", false};
 
     BoolSetting useQtSystemStyle = {"/appearance/useQtSystemStyle", false};
+    BoolSetting glassSkinEnabled = {"/appearance/glassSkinEnabled", false};
 
     float getClampedUiScale() const;
     void setClampedUiScale(float value);

@@ -45,11 +45,16 @@ Remove-Item $identityPath
 $settingsFile = Join-Path $identity.settingsDirectory 'settings.json'
 if (Test-Path $settingsFile) { throw "Refusing to replace an existing profile at $settingsFile" }
 New-Item -ItemType Directory -Path $identity.settingsDirectory -Force | Out-Null
-foreach ($theme in @('Dark', 'Glass', 'Moltorino Midnight')) {
-    $profile = @{ appearance = @{ theme = @{ name = $theme; moltorinoSelection = $theme; defaultApplied = $true; bluzyrinoMigrated = $true } } }
+foreach ($testCase in @(
+    @{ name = 'Baseline'; theme = 'Dark'; enabled = $false },
+    @{ name = 'Glass-Dark'; theme = 'Dark'; enabled = $true },
+    @{ name = 'Glass-Theme'; theme = 'Glass'; enabled = $true }
+)) {
+    $theme = $testCase.theme
+    $profile = @{ appearance = @{ glassSkinEnabled = $testCase.enabled; theme = @{ name = $theme; moltorinoSelection = $theme; defaultApplied = $true; bluzyrinoMigrated = $true } } }
     $profile | ConvertTo-Json -Depth 8 | Set-Content $settingsFile -Encoding utf8
     $before = (Get-FileHash $settingsFile).Hash
-    $env:MOLTORINO_UI_REVIEW_DIR = Join-Path $ReviewDirectory $theme
+    $env:MOLTORINO_UI_REVIEW_DIR = Join-Path $ReviewDirectory $testCase.name
     New-Item -ItemType Directory -Path $env:MOLTORINO_UI_REVIEW_DIR -Force | Out-Null
     $env:CHATTERINO_LOG_TO_FILE = Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'startup.log'
     Invoke-Package @('--verbose')
