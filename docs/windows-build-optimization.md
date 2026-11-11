@@ -113,16 +113,44 @@ reported with that distinction.
 | --- | --- | ---: | ---: | ---: | ---: |
 | [Original #17](https://github.com/Bobbywtw/Moltorino/actions/runs/42981519523) | Cold; 0/649 compiler hits | 44m 10s | 19m 43s | 20m 49s | 4s |
 | [Cold full #18](https://github.com/Bobbywtw/Moltorino/actions/runs/43076969357) | Cold; 0/649 compiler hits | 46m 40s, including 75s experiment | 15m 02s | 26m 05s | 7s |
+| [Warm full #19, attempt 1](https://github.com/Bobbywtw/Moltorino/actions/runs/43084679039) | Conan/base compiler cache restored; 644/649 hits | 14m 27s | 1s after 25s restore | 10m 03s | 7s |
+| [Warm full #19, attempt 2](https://github.com/Bobbywtw/Moltorino/actions/runs/43084679039) | Conan, compiler base and changed-entry cache restored; 645/649 hits | 12m 30s | 2s after 23s restore | 8m 14s | 6s |
 | [Fast #7](https://github.com/Bobbywtw/Moltorino/actions/runs/43078041469) | Qt restored; no Conan/app compile | 1m 31s | None | Lab/QSB compilation 7s | Lab deployment 2s |
+| [Fast #8](https://github.com/Bobbywtw/Moltorino/actions/runs/43084679086) | Qt restored; native composer reused from verified #18 | 1m 41s | None | Lab/QSB compilation 6s; no app compile | Lab deployment 2s |
 
 The first fast run had no previous verified full package on this new branch and
-reported native-composer deferral explicitly. Later matching-package reuse must
-be measured separately. The cold full run did not improve the overall total versus #17. Its Conan step
+reported native-composer deferral explicitly. Fast #8 then selected successful
+full #18, verified the matching native fingerprint, and ran the actual application
+composer checks in ten seconds without recompiling Moltorino. All three settings
+fixtures preserved their contents, multiline input grew, narrow-window resizing
+kept the text, and restoring the window restored the original composer height. The cold full run did not improve the overall total versus #17. Its Conan step
 was about 24% shorter, while native compilation/linking took longer. The separate
 cold-stage command measurements were 21.068s configuration, 1263.466s core C++,
 and 275.772s remaining targets/linking. These observations include runner
-variation and are not a controlled per-change performance attribution. The warm
-full result is recorded after its workflow completes.
+variation and are not a controlled per-change performance attribution. The warm full job completed in 14m 27s with production LTO enabled. Its actual
+app build command took 555.687s; native-object command span was 229.625s and the
+final executable link took 325.922s. Configuration took 39.660s, and the existing
+real version-object preflight accounts for the remainder of the 603s combined
+build step. Packaging measured 6.955s. These spans are not added twice.
+
+On the warm run, Conan restored in 25s, installed in 0.909s and skipped its cache
+upload. sccache restored the base in 12s and achieved **644/649 hits (99.23%)**,
+with zero non-cacheable calls. Only five changed entries, **4,824,581 bytes**,
+needed uploading, in two seconds; the 1,398,854,997-byte base was not uploaded
+again. The unchanged second attempt then restored both the base and the exact
+changed-entry cache successfully. The real version-object preflight was a cache
+hit, and the final build recorded **645/649 hits (99.38%)**, four misses and zero
+non-cacheable calls. Exact Conan/base/overlay hits required no cache uploads.
+Base restore took 17s, overlay restore 1s, applying it 1s, and Conan restore 23s.
+The actual Conan install command took 0.698s (the complete install/cleanup step
+rounded to 2s).
+
+That final Windows job completed in **12m 30s**. Its app build command took
+456.267s, native-object command span 184.734s, and executable link 271.407s.
+Configuration took 33.685s; the complete configuration/preflight/build step took
+494s. Packaging measured 5.878s. This validates changed-entry cache consumption
+as well as the earlier successful save. These are observed runs with explicit
+cache states, not a claim that every cold build will finish in twelve minutes.
 
 Build metadata contains stage JSON, raw sccache statistics, source provenance and
 the Conan lock. The optional `benchmark_parallelism` input (also enabled by an
@@ -142,6 +170,34 @@ The eight-heavy-object experiment bypassed sccache hits and measured:
 | 6 | 35.859 | 11,522 MB | 2,269 MB | 0 |
 
 Six jobs were approximately 7% faster in this one representative sample, with
-ample memory headroom. The warm full workflow tests six application jobs; Conan
+ample memory headroom. Six application jobs passed the warm full workflow; Conan
 and JOM retain four. This is not a complete cold-application comparison or a
 universal speed guarantee.
+
+
+## Final package and scope verification
+
+The final full build uses commit `ade7ee7ce0ca1c3378a9197525bb9abf11b06435`.
+The report-only commit that follows it does not alter application inputs.
+`Moltorino-Windows` is available under Artifacts on successful full run #19.
+GitHub sign-in is required for Actions artifact downloads.
+
+The final ZIP has 163 entries and contains `Moltorino7.exe`, the native glass
+plugin, Qt Quick/QML imports, Qt/SSL/VC runtimes and the existing media/7zip tools.
+There is no modes/portable marker, JOM, CI helper executable or PDB. PE import
+inspection verified all 21 Qt/OpenSSL/VC DLL names in the package (110 distinct
+imports including OS libraries). The final file manifest matches the inspected
+first warm package.
+
+The real extracted executable reported exactly `Moltorino M15.5.2`, Qt 6.9.3,
+Nightly false, portable false, a clean source identity, and normal
+`%APPDATA%\Chatterino2\Settings`. It launched successfully with an isolated
+system-only PATH, as did FFmpeg and FFprobe 7.1.5. All three actual UI profiles
+preserved their settings and input text through multiline/narrow/restored tests.
+The source changes do not modify providers, accounts, moderation, badges, paints,
+emotes, commands, plugins, application versioning or normal settings logic.
+No stable/default-branch merge or larger Liquid Glass production integration was
+performed.
+
+Final inner ZIP SHA256:
+`f390aad73e884dbf6d32948293720769d7a7f9dcb71356dd533d88bf83a8c6fc`.
