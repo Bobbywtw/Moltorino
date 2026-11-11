@@ -20,6 +20,7 @@
 #include "widgets/dialogs/ColorPickerDialog.hpp"
 #include "widgets/dialogs/MoltorinoDialogTheme.hpp"
 #include "widgets/dialogs/SettingsDialog.hpp"
+#include "widgets/helper/GlassMaterial.hpp"
 #include "widgets/Notebook.hpp"
 #include "widgets/splits/DraggedSplit.hpp"
 #include "widgets/splits/Split.hpp"
@@ -1709,7 +1710,10 @@ void NotebookTab::paintEvent(QPaintEvent *)
                           individual || this->isFirstVisible_,
                           individual || this->isLastVisible_);
     painter.setRenderHint(QPainter::Antialiasing, tabRadius > 0);
-    painter.fillPath(backgroundPath, tabBackground);
+    auto stateTint = tabBackground.color();
+    stateTint.setAlpha(
+        qRound(this->selectionProgress_ * 115 + this->hoverProgress() * 36));
+    painter.fillPath(backgroundPath, stateTint);
 
     QColor groupTint;
     if (this->role_ == Role::GroupHeader && this->groupColorMode_ == "theme")

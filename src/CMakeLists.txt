@@ -853,6 +853,12 @@ set(SOURCE_FILES
         util/SelfCheck.hpp
         util/UiReview.cpp
         util/UiReview.hpp
+        util/NativeGlass.cpp
+        util/NativeGlass.hpp
+        widgets/helper/GlassMaterial.cpp
+        widgets/helper/GlassMaterial.hpp
+        widgets/helper/GlassStyle.cpp
+        widgets/helper/GlassStyle.hpp
         common/UiPalette.hpp
         util/SettingsTransfer.cpp
         util/SettingsTransfer.hpp

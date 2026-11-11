@@ -16,6 +16,7 @@ GenericListView::GenericListView()
     : itemDelegate_(this)
 {
     this->setMouseTracking(true);
+    this->viewport()->setAutoFillBackground(false);
     this->setSelectionMode(QAbstractItemView::SingleSelection);
     this->setSelectionBehavior(QAbstractItemView::SelectItems);
     this->setItemDelegate(&this->itemDelegate_);
@@ -115,12 +116,11 @@ void GenericListView::refreshTheme(const Theme &theme)
     auto accentColor = ui.raised;
     const auto selCol = accentColor.name(QColor::HexArgb);
 
-    const auto listStyle =
-        QStringLiteral(R"(
+    const auto listStyle = QStringLiteral(R"(
         QListView {
             border: none;
             color: %1;
-            background: %3;
+            background: transparent;
             padding: 4px;
             selection-background-color: %2;
         }
@@ -161,7 +161,7 @@ void GenericListView::refreshTheme(const Theme &theme)
             min-width: 8;
             height: 8;
         })")
-            .arg(textCol, selCol, ui.surface.name(QColor::HexArgb));
+                               .arg(textCol, selCol);
 
     this->setStyleSheet(listStyle);
 }

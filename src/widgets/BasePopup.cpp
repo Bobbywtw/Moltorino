@@ -4,6 +4,8 @@
 
 #include "widgets/BasePopup.hpp"
 
+#include "util/NativeGlass.hpp"
+
 #include <QAbstractButton>
 #include <QDialogButtonBox>
 #include <QKeyEvent>
@@ -22,6 +24,13 @@ void BasePopup::showEvent(QShowEvent *event)
 {
     BaseWindow::showEvent(event);
     this->openingAnimation_.stop();
+    if (nativeglass::active(this))
+    {
+        // Global window-opacity animation would turn a DWM-backed HWND into a
+        // layered window and temporarily disable the native material.
+        this->setWindowOpacity(1.0);
+        return;
+    }
     this->openingAnimation_.setStartValue(0.96);
     this->openingAnimation_.setEndValue(1.0);
     this->openingAnimation_.start();

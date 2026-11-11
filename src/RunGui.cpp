@@ -21,6 +21,7 @@
 #include "util/UiReview.hpp"
 #include "util/UnixSignalHandler.hpp"
 #include "widgets/dialogs/LastRunCrashDialog.hpp"
+#include "widgets/helper/GlassStyle.hpp"
 
 #include <QApplication>
 #include <QCryptographicHash>
@@ -224,7 +225,7 @@ void initQt(const Args &args, [[maybe_unused]] const Settings &settings)
     }
     else
     {
-        QApplication::setStyle(QStyleFactory::create("Fusion"));
+        QApplication::setStyle(new GlassStyle);
         installCustomPalette();
     }
 

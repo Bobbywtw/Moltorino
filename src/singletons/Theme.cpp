@@ -1013,24 +1013,14 @@ void Theme::parseFrom(const QJsonObject &root, bool isCustomTheme)
     QApplication::setPalette(palette);
     // Only standard Qt controls use QSS; chat chrome is painted by its widgets.
     qApp->setStyleSheet(uR"(
-        QMenu { background: %1; color: %2; border: 1px solid %3;
-                padding: 4px; border-radius: 6px; }
-        QMenu::item { padding: 6px 26px 6px 12px; border-radius: 4px; }
-        QMenu::item:selected { background: %4; }
-        QMenu::item:disabled { color: %5; }
-        QMenu::separator { height: 1px; background: %3; margin: 4px 8px; }
-        QToolTip { background: %1; color: %2; border: 1px solid %3;
-                   padding: 5px 7px; border-radius: 5px; }
         QScrollBar:vertical { width: 10px; background: transparent; margin: 2px; }
         QScrollBar:horizontal { height: 10px; background: transparent; margin: 2px; }
-        QScrollBar::handle { background: %5; border-radius: 3px;
+        QScrollBar::handle { background: %1; border-radius: 3px;
                             min-height: 24px; min-width: 24px; }
         QScrollBar::handle:hover { background: %2; }
         QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
         QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
-    )"_s.arg(ui.surface.name(QColor::HexArgb), ui.text.name(),
-             ui.border.name(QColor::HexArgb), ui.raised.name(),
-             ui.muted.name()));
+    )"_s.arg(ui.muted.name(), ui.text.name()));
 }
 
 bool Theme::isAutoReloading() const

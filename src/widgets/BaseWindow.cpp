@@ -6,14 +6,17 @@
 
 #include "Application.hpp"
 #include "common/QLogging.hpp"
+#include "common/UiPalette.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/DebugCount.hpp"
+#include "util/NativeGlass.hpp"
 #include "util/WindowsHelper.hpp"
 #include "widgets/buttons/LabelButton.hpp"
 #include "widgets/buttons/TitlebarButton.hpp"
 #include "widgets/buttons/TitlebarButtons.hpp"
+#include "widgets/helper/GlassMaterial.hpp"
 #include "widgets/helper/SettingsTheme.hpp"
 #include "widgets/Label.hpp"
 #include "widgets/Window.hpp"
@@ -204,6 +207,22 @@ bool isInteractiveChild(const QWidget *widget, const QWidget *window)
     return false;
 }
 
+void updateNativeMaterial(BaseWindow *window, bool dark)
+{
+    if (!nativeglass::supported() || !window->hasCustomWindowFrame())
+    {
+        return;
+    }
+    const bool transient =
+        window->windowType() == Qt::Dialog || window->windowType() == Qt::Tool;
+    const bool active = nativeglass::apply(window, transient, dark);
+    auto palette = window->palette();
+    palette.setColor(QPalette::Window, active ? QColor(Qt::transparent)
+                                              : uiPalette(!dark).canvas);
+    window->setPalette(palette);
+    window->setAutoFillBackground(false);
+}
+
 Qt::WindowFlags windowFlagsFor(FlagsEnum<BaseWindow::Flags> flags)
 {
     Qt::WindowFlags out;
@@ -262,6 +281,10 @@ BaseWindow::BaseWindow(FlagsEnum<Flags> _flags, QWidget *parent)
 #endif
     }
 
+    if (this->hasCustomWindowFrame())
+    {
+        nativeglass::prepare(this);
+    }
     this->init();
 
     getSettings()->uiScale.connect(
@@ -651,6 +674,10 @@ void BaseWindow::themeChangedEvent()
         palette.setColor(QPalette::WindowText, this->theme->window.text);
         this->setPalette(palette);
     }
+    if (this->shown_)
+    {
+        updateNativeMaterial(this, !this->theme->isLightTheme());
+    }
 }
 
 bool BaseWindow::event(QEvent *event)
@@ -821,9 +848,10 @@ void BaseWindow::changeEvent(QEvent *event)
         if (hwnd)
         {
             auto palette = this->palette();
-            palette.setColor(QPalette::Window, GetForegroundWindow() == *hwnd
-                                                   ? QColor(90, 90, 90)
-                                                   : QColor(50, 50, 50));
+            palette.setColor(QPalette::Window,
+                             nativeglass::active(this)
+                                 ? QColor(Qt::transparent)
+                                 : this->theme->window.background);
             this->setPalette(palette);
         }
     }
@@ -875,6 +903,10 @@ void BaseWindow::resizeEvent(QResizeEvent *)
 #ifdef USEWINSDK
     this->calcButtonsSizes();
     this->updateRealSize();
+    if (this->shown_)
+    {
+        updateNativeMaterial(this, !this->theme->isLightTheme());
+    }
 #endif
 }
 
@@ -898,6 +930,7 @@ void BaseWindow::closeEvent(QCloseEvent *)
 
 void BaseWindow::showEvent(QShowEvent *)
 {
+    updateNativeMaterial(this, !this->theme->isLightTheme());
 #ifdef Q_OS_WIN
     if (this->flags_.has(BoundsCheckOnShow) && !this->isMaximized() &&
         !this->isFullScreen() && !this->isMinimized())
@@ -937,6 +970,14 @@ bool BaseWindow::nativeEvent(const QByteArray &eventType, void *message,
 
     switch (msg->message)
     {
+        case WM_DWMCOMPOSITIONCHANGED:
+        case WM_THEMECHANGED:
+        case WM_SETTINGCHANGE:
+            nativeglass::refreshPolicy();
+            updateNativeMaterial(this, !this->theme->isLightTheme());
+            this->update();
+            break;
+
         case WM_NCLBUTTONDBLCLK:
             if (this->flags_.has(DisableMaximize) && msg->wParam == HTCAPTION)
             {
@@ -1099,6 +1140,14 @@ void BaseWindow::scaleChangedEvent(float scale)
 void BaseWindow::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
+    if (this->flags_.has(Dialog) && !this->hasCustomWindowFrame())
+    {
+        paintGlassSurface(painter, this,
+                          QRectF(this->rect()).adjusted(0.5, 0.5, -0.5, -0.5),
+                          {.role = GlassRole::Popover,
+                           .radius = 8 * this->scale(),
+                           .light = this->theme->isLightTheme()});
+    }
     this->drawOutline(painter);
     this->drawCustomWindowFrame(painter);
 }
@@ -1107,7 +1156,9 @@ void BaseWindow::drawOutline(QPainter &painter)
 {
     if (this->frameless_)
     {
-        painter.setPen(QColor("#999"));
+        painter.setPen(this->flags_.has(Dialog)
+                           ? uiPalette(this->theme->isLightTheme()).border
+                           : QColor("#999"));
         painter.drawRect(0, 0, this->width() - 1, this->height() - 1);
     }
 }
@@ -1192,9 +1243,15 @@ void BaseWindow::drawCustomWindowFrame(QPainter &painter)
 #ifdef USEWINSDK
     if (this->hasCustomWindowFrame())
     {
+        painter.save();
         QColor bg = this->overrideBackgroundColor_.value_or(
             this->theme->window.background);
-        if (this->isMaximized_)
+        if (nativeglass::active(this))
+        {
+            painter.setCompositionMode(QPainter::CompositionMode_Source);
+            painter.fillRect(this->rect(), Qt::transparent);
+        }
+        else if (this->isMaximized_)
         {
             painter.fillRect(this->rect(), bg);
         }
@@ -1217,6 +1274,15 @@ void BaseWindow::drawCustomWindowFrame(QPainter &painter)
                 painter.fillRect(1, 1, this->realBounds_.width() - 2,
                                  this->realBounds_.height() - 2, bg);
             }
+        }
+        painter.restore();
+        if (this->ui_.titlebarBox)
+        {
+            paintGlassSurface(painter, this, this->ui_.titlebarBox->geometry(),
+                              {.role = GlassRole::Chrome,
+                               .light = this->theme->isLightTheme(),
+                               .active = this->isActiveWindow(),
+                               .nativeBackdrop = nativeglass::active(this)});
         }
     }
 #endif

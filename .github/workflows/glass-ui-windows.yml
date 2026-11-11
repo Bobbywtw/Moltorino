@@ -169,6 +169,17 @@ jobs:
           7z a Moltorino-Windows.zip Moltorino-Glass/
           if ($LASTEXITCODE -ne 0) { throw "ZIP creation failed" }
 
+      - name: Verify material rendering and sampling budget
+        shell: pwsh
+        run: |
+          cmake -S .CI/material-preview -B build/material-preview -G Ninja -DCMAKE_BUILD_TYPE=Release
+          if ($LASTEXITCODE -ne 0) { throw "Material check configuration failed" }
+          cmake --build build/material-preview --parallel 4
+          if ($LASTEXITCODE -ne 0) { throw "Material check compilation failed" }
+          New-Item -ItemType Directory build/ui-review/material-reference -Force | Out-Null
+          & build/material-preview/material-preview.exe build/ui-review/material-reference 2>&1 | Tee-Object build/ui-review/material-reference/measurements.log
+          if ($LASTEXITCODE -ne 0) { throw "Material rendering/cache/capture checks failed" }
+
       - name: Prepare native crash diagnostics
         shell: pwsh
         run: |
@@ -238,4 +249,42 @@ jobs:
           name: Moltorino-Windows
           overwrite: true
           path: build/Moltorino-Windows.zip
+          retention-days: 14
+
+  verify-modern-windows:
+    name: Verify packaged UI on modern Windows
+    needs: build-windows
+    # Runtime test only. Compilation and Conan remain on Visual Studio 2022.
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: Moltorino-Windows
+          path: downloaded-package
+      - name: Enable diagnostic compiler
+        uses: Chatterino/msvc-dev-cmd@v2.0.5
+        with:
+          arch: x64
+      - name: Test extracted package and record DWM status
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory build/diagnostics -Force | Out-Null
+          cl.exe /nologo /EHsc /std:c++20 /MT .CI/debug-windows-startup.cpp /Febuild/diagnostics/debug-windows-startup.exe /Fobuild/diagnostics/debug-windows-startup.obj /link dbghelp.lib
+          if ($LASTEXITCODE -ne 0) { throw "Cannot build startup diagnostics" }
+          $verifyDir = Join-Path $env:RUNNER_TEMP 'glass-modern-check'
+          Expand-Archive downloaded-package/Moltorino-Windows.zip -DestinationPath $verifyDir
+          $packageDir = Join-Path $verifyDir 'Moltorino-Glass'
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $env:QT_PLUGIN_PATH = $packageDir
+          $env:QT_QPA_PLATFORM_PLUGIN_PATH = Join-Path $packageDir 'platforms'
+          .\.CI\verify-glass-ui.ps1 -PackageDirectory $packageDir -ReviewDirectory (Join-Path $env:GITHUB_WORKSPACE 'build/ui-review')
+      - name: Upload modern Windows UI review
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: Moltorino-UI-Review-Modern-Windows
+          path: build/ui-review/
+          if-no-files-found: error
+          overwrite: true
           retention-days: 14

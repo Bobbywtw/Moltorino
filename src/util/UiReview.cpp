@@ -8,6 +8,9 @@
 #include "messages/Message.hpp"
 #include "messages/MessageBuilder.hpp"
 #include "singletons/WindowManager.hpp"
+#include "util/NativeGlass.hpp"
+#include "widgets/buttons/SvgButton.hpp"
+#include "widgets/helper/ChannelView.hpp"
 #include "widgets/helper/NotebookTab.hpp"
 #include "widgets/Notebook.hpp"
 #include "widgets/splits/Split.hpp"
@@ -18,6 +21,10 @@
 #include <QAction>
 #include <QApplication>
 #include <QDir>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMenu>
 #include <QPainter>
 #include <QTimer>
@@ -110,19 +117,67 @@ void scheduleUiReview()
         notebook.select(page);
         getApp()->getWindows()->forceLayoutChannelViews();
         window.show();
-        QTimer::singleShot(700, qApp, [output, &window] {
+        QTimer::singleShot(700, qApp, [output, &window, split] {
             QDir().mkpath(output);
             const auto saved = window.grab().save(output + "/chat.png");
-            QMenu menu;
-            menu.addAction("Open channel");
-            menu.addAction("Copy channel address");
-            menu.addSeparator();
-            menu.addAction("Channel settings");
-            menu.addAction("Unavailable action")->setEnabled(false);
-            menu.ensurePolished();
-            menu.resize(menu.sizeHint());
-            const auto menuSaved = menu.grab().save(output + "/menu.png");
-            qApp->exit(saved && menuSaved ? 0 : 1);
+            auto &input = split->getInput();
+            const auto singleHeight = input.height();
+            const auto scale = input.scale();
+            QJsonArray buttons;
+            for (auto *button : input.findChildren<SvgButton *>())
+            {
+                if (!button->isVisible())
+                {
+                    continue;
+                }
+                buttons.append(QJsonObject{
+                    {"hitWidth", button->width() / scale},
+                    {"hitHeight", button->height() / scale},
+                    {"glyphWidth",
+                     button->width() / scale - 2 * button->padding().width()}});
+            }
+            QJsonObject state{
+                {"nativeSupported", nativeglass::supported()},
+                {"nativeActive", nativeglass::active(&window)},
+                {"effectsAllowed", nativeglass::effectsAllowed()},
+                {"dwmResult",
+                 window.property("_moltorino_dwmResult").toString()},
+                {"dwmType", window.property("_moltorino_dwmType").toInt()},
+                {"singleLineComposerHeight", singleHeight / scale},
+                {"buttons", buttons}};
+            input.setInputText("First line\nSecond line\nThird line");
+            QTimer::singleShot(
+                250, qApp,
+                [output, &window, split, singleHeight, state, saved]() mutable {
+                    state.insert(
+                        "multilineComposerHeight",
+                        split->getInput().height() / split->getInput().scale());
+                    const auto grew = split->getInput().height() > singleHeight;
+                    split->getInput().setInputText("Thanks for the stream!");
+                    auto *menu = new QMenu(&window);
+                    menu->addAction("Open channel");
+                    menu->addAction("Copy channel address");
+                    menu->addSeparator();
+                    menu->addAction("Channel settings");
+                    menu->addAction("Unavailable action")->setEnabled(false);
+                    menu->popup(
+                        split->getChannelView().mapToGlobal(QPoint(80, 90)));
+                    menu->setActiveAction(menu->actions()[1]);
+                    QTimer::singleShot(
+                        250, qApp, [output, menu, state, saved, grew] {
+                            const auto menuSaved =
+                                menu->grab().save(output + "/menu.png");
+                            QFile file(output + "/material-state.json");
+                            const auto written =
+                                file.open(QIODevice::WriteOnly) &&
+                                file.write(QJsonDocument(state).toJson()) > 0;
+                            file.close();
+                            menu->close();
+                            menu->deleteLater();
+                            qApp->exit(
+                                saved && menuSaved && written && grew ? 0 : 1);
+                        });
+                });
         });
     });
 }

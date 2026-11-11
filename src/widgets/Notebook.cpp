@@ -16,6 +16,7 @@
 #include "singletons/StreamerMode.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
+#include "util/NativeGlass.hpp"
 #include "widgets/buttons/DrawnButton.hpp"
 #include "widgets/buttons/InitMoltorinoUpdateButton.hpp"
 #include "widgets/buttons/PixmapButton.hpp"
@@ -25,6 +26,7 @@
 #include "widgets/dialogs/SettingsDialog.hpp"
 #include "widgets/dialogs/TabGroupDialog.hpp"
 #include "widgets/helper/ChannelView.hpp"
+#include "widgets/helper/GlassMaterial.hpp"
 #include "widgets/helper/NotebookTab.hpp"
 #include "widgets/splits/Split.hpp"
 #include "widgets/splits/SplitContainer.hpp"
@@ -3063,7 +3065,40 @@ void Notebook::paintEvent(QPaintEvent *event)
     auto scale = this->scale();
 
     QPainter painter(this);
-    painter.fillRect(this->rect(), this->theme->window.background);
+    if (nativeglass::active(this->window()))
+    {
+        painter.save();
+        painter.setCompositionMode(QPainter::CompositionMode_Source);
+        painter.fillRect(this->rect(), Qt::transparent);
+        painter.restore();
+    }
+    else
+    {
+        painter.fillRect(this->rect(), this->theme->window.background);
+    }
+    QRect chrome;
+    switch (this->tabLocation_)
+    {
+        case NotebookTabLocation::Top:
+            chrome = QRect(0, 0, this->width(), this->lineOffset_ + 1);
+            break;
+        case NotebookTabLocation::Bottom:
+            chrome = QRect(0, this->lineOffset_, this->width(),
+                           this->height() - this->lineOffset_);
+            break;
+        case NotebookTabLocation::Left:
+            chrome = QRect(0, 0, this->lineOffset_ + 1, this->height());
+            break;
+        case NotebookTabLocation::Right:
+            chrome = QRect(this->lineOffset_, 0,
+                           this->width() - this->lineOffset_, this->height());
+            break;
+    }
+    paintGlassSurface(painter, this, chrome,
+                      {.role = GlassRole::Chrome,
+                       .light = this->theme->isLightTheme(),
+                       .active = this->window()->isActiveWindow(),
+                       .nativeBackdrop = nativeglass::active(this->window())});
     if (this->tabLocation_ == NotebookTabLocation::Top ||
         this->tabLocation_ == NotebookTabLocation::Bottom)
     {

@@ -7,6 +7,7 @@
 #include "common/UiPalette.hpp"
 #include "singletons/Theme.hpp"
 #include "util/FunctionEventFilter.hpp"
+#include "widgets/helper/GlassMaterial.hpp"
 
 #include <QApplication>
 #include <QDebug>
@@ -418,19 +419,11 @@ void Button::fancyPaint(QPainter &painter)
     {
         return;
     }
-    auto color = this->mouseEffectColor_.value_or(
-        this->theme->isLightTheme() ? QColor(0, 0, 0) : QColor(255, 255, 255));
-    color.setAlphaF((pressed ? 0.12 : 0.065) * amount);
-    painter.save();
-    painter.setRenderHint(QPainter::Antialiasing);
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(color);
     const qreal inset = std::max<qreal>(1, this->scale());
-    const qreal radius = 5 * this->scale();
-    painter.drawRoundedRect(
-        QRectF(this->rect()).adjusted(inset, inset, -inset, -inset), radius,
-        radius);
-    painter.restore();
+    GlassSurface::paintInteraction(
+        painter, QRectF(this->rect()).adjusted(inset, inset, -inset, -inset),
+        5 * this->scale(), amount, pressed, this->theme->isLightTheme(),
+        this->mousePos_);
 }
 
 }

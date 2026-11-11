@@ -42,6 +42,7 @@
 #include "util/Helpers.hpp"
 #include "util/LayoutCreator.hpp"
 #include "util/MultiChannel.hpp"
+#include "util/NativeGlass.hpp"
 #include "widgets/buttons/LabelButton.hpp"
 #include "widgets/buttons/SvgButton.hpp"
 #include "widgets/dialogs/EmotePopup.hpp"
@@ -49,6 +50,7 @@
 #include "widgets/dialogs/PredictionDialog.hpp"
 #include "widgets/dialogs/UserInfoPopup.hpp"
 #include "widgets/dialogs/VanityDialog.hpp"
+#include "widgets/helper/GlassMaterial.hpp"
 #if MOLTORINO_ENABLE_CHANNEL_POINT_REWARDS
 #    include "widgets/dialogs/ChannelPointsDialog.hpp"
 #endif
@@ -1946,7 +1948,7 @@ void SplitInput::initLayout()
 
     auto inputWrapper =
         layout.emplace<QWidget>().assign(&this->ui_.inputWrapper);
-    inputWrapper->setContentsMargins(8, 6, 8, 6);
+    inputWrapper->setContentsMargins(9, 3, 6, 3);
 
     auto hboxLayout =
         inputWrapper.setLayoutType<QHBoxLayout>().withoutMargin().assign(
@@ -2067,7 +2069,6 @@ void SplitInput::initLayout()
             },
             nullptr, QSize{3, 3});
 
-        box->addStretch(1);
         auto *statusRow = new QHBoxLayout();
         statusRow->setContentsMargins(0, 0, 0, 0);
         statusRow->setSpacing(0);
@@ -2076,13 +2077,13 @@ void SplitInput::initLayout()
                              Qt::AlignRight | Qt::AlignVCenter);
         statusRow->addWidget(this->ui_.multiChannelDestinationButton, 0,
                              Qt::AlignVCenter);
-        box->addLayout(statusRow);
 
         auto *buttonsRow = new QHBoxLayout();
         this->ui_.buttonsRow = buttonsRow;
         buttonsRow->setContentsMargins(0, 0, 0, 0);
         buttonsRow->setSpacing(0);
-        buttonsRow->addWidget(this->ui_.sendWaitStatus, 0, Qt::AlignBottom);
+        buttonsRow->addLayout(statusRow);
+        buttonsRow->addWidget(this->ui_.sendWaitStatus, 0, Qt::AlignVCenter);
         buttonsRow->addWidget(this->ui_.channelPointsLabel, 0,
                               Qt::AlignBottom);
         buttonsRow->addWidget(this->ui_.predictionButton, 0,
@@ -2093,6 +2094,7 @@ void SplitInput::initLayout()
         buttonsRow->addWidget(this->ui_.vanityButton, 0, Qt::AlignBottom);
         buttonsRow->addWidget(this->ui_.emoteButton, 0, Qt::AlignBottom);
         box->addLayout(buttonsRow);
+        this->ui_.inputHbox->setAlignment(box.getElement(), Qt::AlignBottom);
     }
 
     // ---- misc
@@ -2405,12 +2407,22 @@ void SplitInput::updateEmoteButton()
 {
     auto scale = this->scale();
     this->ui_.inputWrapper->setContentsMargins(
-        int(std::round(8 * scale)), int(std::round(6 * scale)),
-        int(std::round(8 * scale)), int(std::round(6 * scale)));
+        int(std::round(9 * scale)), int(std::round(3 * scale)),
+        int(std::round(6 * scale)), int(std::round(3 * scale)));
     auto buttonSize = int(std::round(24 * scale));
     auto labelBottomInset = int(std::round(1 * scale));
 
     this->ui_.emoteButton->setFixedSize(buttonSize, buttonSize);
+    for (auto *button :
+         {this->ui_.emoteButton, this->ui_.predictionButton,
+          this->ui_.pollButton, this->ui_.outgoingTranslateButton,
+          this->ui_.vanityButton})
+    {
+        if (button)
+        {
+            button->setPadding(QSize{4, 4});
+        }
+    }
 
     if (this->ui_.buttonsRow)
     {
@@ -2562,6 +2574,14 @@ void SplitInput::updateActionRowCompactness()
         return true;
     };
 
+    if (hasRealWidth && getSettings()->showMessageLength)
+    {
+        budget -= compactWidgetWidth(this->ui_.textEditLength);
+    }
+    if (hasRealWidth && this->ui_.multiChannelDestinationButton->isVisible())
+    {
+        budget -= compactWidgetWidth(this->ui_.multiChannelDestinationButton);
+    }
     const bool showChannelPoints = reserveEvenIfTight(
         this->ui_.channelPointsLabel, this->channelPointsLabelWanted_);
     const bool showPredictionButton =
@@ -4998,16 +5018,36 @@ void SplitInput::paintEvent(QPaintEvent *)
     painter.fillRect(this->rect(), this->theme->splits.background);
     painter.setRenderHint(QPainter::Antialiasing);
     const QRectF input(this->ui_.inputWrapper->geometry());
-    painter.setBrush(this->backgroundColor());
-    painter.setPen(QPen(uiMix(ui.border, ui.focus, this->focusProgress_), 1));
+    paintGlassSurface(painter, this, input.adjusted(0.5, 0.5, -0.5, -0.5),
+                      {.role = GlassRole::Composer,
+                       .edge = GlassEdge::Bottom,
+                       .radius = 7 * this->scale(),
+                       .light = this->theme->isLightTheme(),
+                       .active = this->window()->isActiveWindow()},
+                      &this->split_->getChannelView());
+    if (this->backgroundColor() != this->theme->splits.input.background)
+    {
+        QPainterPath pulsePath;
+        pulsePath.addRoundedRect(input, 7 * this->scale(), 7 * this->scale());
+        auto pulse = this->backgroundColor();
+        pulse.setAlpha(70);
+        painter.fillPath(pulsePath, pulse);
+    }
+    painter.setBrush(Qt::NoBrush);
+    painter.setPen(
+        QPen(uiMix(ui.border, ui.focus, this->focusProgress_ * 0.65), 1));
     painter.drawRoundedRect(input.adjusted(0.5, 0.5, -0.5, -0.5),
-                            6 * this->scale(), 6 * this->scale());
+                            7 * this->scale(), 7 * this->scale());
     if (this->enableInlineReplying_ && this->replyTarget_ != nullptr)
     {
         const QRectF reply(this->ui_.replyWrapper->geometry());
         painter.setPen(Qt::NoPen);
-        painter.setBrush(uiMix(ui.surface, ui.canvas, 0.3));
-        painter.drawRoundedRect(reply, 4 * this->scale(), 4 * this->scale());
+        paintGlassSurface(painter, this, reply,
+                          {.role = GlassRole::Chrome,
+                           .edge = GlassEdge::Bottom,
+                           .radius = 4 * this->scale(),
+                           .light = this->theme->isLightTheme()},
+                          &this->split_->getChannelView());
         painter.fillRect(
             QRectF(reply.left() + 3 * this->scale(),
                    reply.top() + 5 * this->scale(), 2 * this->scale(),
@@ -5179,7 +5219,7 @@ bool SplitInput::shouldPreventInput(const QString &text) const
 
 int SplitInput::marginForTheme() const
 {
-    return std::max(1, int(4 * this->scale()));
+    return std::max(1, int(3 * this->scale()));
 }
 
 void SplitInput::applyOuterMargin()

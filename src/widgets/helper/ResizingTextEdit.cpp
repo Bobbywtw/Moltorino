@@ -178,7 +178,7 @@ int ResizingTextEdit::heightForWidth(int width) const
     auto documentWidth = qMax(width - margins.left() - margins.right(), 1);
 
     return margins.top() + qCeil(this->documentHeightForWidth(documentWidth)) +
-           margins.bottom() + 5;
+           margins.bottom() + (this->frameShape() == QFrame::NoFrame ? 1 : 5);
 }
 
 qreal ResizingTextEdit::documentHeightForWidth(int width) const

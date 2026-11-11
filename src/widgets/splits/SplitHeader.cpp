@@ -40,6 +40,7 @@
 #include "util/Helpers.hpp"
 #include "util/LayoutHelper.hpp"
 #include "util/MultiChannel.hpp"
+#include "util/NativeGlass.hpp"
 #include "widgets/buttons/DrawnButton.hpp"
 #include "widgets/buttons/LabelButton.hpp"
 #include "widgets/buttons/SvgButton.hpp"
@@ -49,6 +50,7 @@
 #include "widgets/helper/AutoModReviewBar.hpp"
 #include "widgets/helper/ChannelView.hpp"
 #include "widgets/helper/CommonTexts.hpp"
+#include "widgets/helper/GlassMaterial.hpp"
 #include "widgets/Label.hpp"
 #include "widgets/splits/Split.hpp"
 #include "widgets/splits/SplitContainer.hpp"
@@ -2400,7 +2402,12 @@ void SplitHeader::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
     const auto &ui = uiPalette(this->theme->isLightTheme());
-    painter.fillRect(this->rect(), ui.surface);
+    paintGlassSurface(painter, this, this->rect(),
+                      {.role = GlassRole::Chrome,
+                       .light = this->theme->isLightTheme(),
+                       .active = this->window()->isActiveWindow(),
+                       .nativeBackdrop = nativeglass::active(this->window())},
+                      &this->split_->getChannelView());
     painter.fillRect(0, this->height() - 1, this->width(), 1, ui.border);
     if (this->split_->hasFocus())
     {

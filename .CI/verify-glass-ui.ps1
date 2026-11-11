@@ -45,7 +45,7 @@ Remove-Item $identityPath
 $settingsFile = Join-Path $identity.settingsDirectory 'settings.json'
 if (Test-Path $settingsFile) { throw "Refusing to replace an existing profile at $settingsFile" }
 New-Item -ItemType Directory -Path $identity.settingsDirectory -Force | Out-Null
-foreach ($theme in @('Dark', 'Glass', 'Moltorino Midnight')) {
+foreach ($theme in @('Dark', 'Glass', 'Moltorino Midnight', 'Light')) {
     $profile = @{ appearance = @{ theme = @{ name = $theme; moltorinoSelection = $theme; defaultApplied = $true; bluzyrinoMigrated = $true } } }
     $profile | ConvertTo-Json -Depth 8 | Set-Content $settingsFile -Encoding utf8
     $before = (Get-FileHash $settingsFile).Hash
@@ -54,8 +54,17 @@ foreach ($theme in @('Dark', 'Glass', 'Moltorino Midnight')) {
     $env:CHATTERINO_LOG_TO_FILE = Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'startup.log'
     Invoke-Package @('--verbose')
     if ((Get-FileHash $settingsFile).Hash -ne $before) { throw "UI review modified the existing $theme settings fixture" }
-    foreach ($capture in @('chat.png', 'menu.png')) {
+    foreach ($capture in @('chat.png', 'menu.png', 'material-state.json')) {
         if (!(Test-Path (Join-Path $env:MOLTORINO_UI_REVIEW_DIR $capture))) { throw "Missing native Qt capture: $theme/$capture" }
+    }
+    $material = Get-Content (Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'material-state.json') -Raw | ConvertFrom-Json
+    Write-Output ($material | ConvertTo-Json -Depth 5 -Compress)
+    if ($material.singleLineComposerHeight -gt 44) { throw "Oversized single-line composer: $($material.singleLineComposerHeight)" }
+    if ($material.multilineComposerHeight -le $material.singleLineComposerHeight) { throw 'Composer no longer grows for multiline input' }
+    foreach ($button in $material.buttons) {
+        if ($button.hitWidth -gt 25 -or $button.hitHeight -gt 25 -or $button.glyphWidth -gt 17) {
+            throw "Oversized composer icon: $($button | ConvertTo-Json -Compress)"
+        }
     }
     Write-Output "Existing $theme profile loaded; settings unchanged; native widget captures saved."
 }
