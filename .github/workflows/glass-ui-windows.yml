@@ -7,13 +7,16 @@ on:
       - liquid-glass-plugin-01
       - liquid-glass-integration-01
       - moltorino-build-optimization-01
-    paths-ignore:
-      - 'tools/glass-lab/**'
-      - 'docs/**'
-      - '.github/workflows/qtquick-glass-lab.yml'
-      - '.CI/verify-glass-lab.ps1'
-      - '.CI/glass-lab-checks.cpp'
-      - '.CI/reuse-composer-package.ps1'
+    paths:
+      - "**"
+      - "!tools/glass-lab/**"
+      - "!docs/**"
+      - "!.github/workflows/qtquick-glass-lab.yml"
+      - "!.CI/verify-glass-lab.ps1"
+      - "!.CI/glass-lab-checks.cpp"
+      - "!.CI/reuse-composer-package.ps1"
+      # The scene embedded by the native integration requires the full app.
+      - "tools/glass-lab/qml/GlassIntegrationPreview.qml"
   workflow_dispatch:
     inputs:
       development_build:
@@ -25,11 +28,18 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: moltorino-windows-full-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   CONAN_VERSION: 2.28.1
   QT_VERSION: 6.9.3
 
 jobs:
+  fast-glass-checks:
+    uses: ./.github/workflows/qtquick-glass-lab.yml
+
   build-windows:
     name: Build Glass UI - Windows x64
     runs-on: windows-2022
@@ -38,6 +48,7 @@ jobs:
       SCCACHE_CACHE_SIZE: 2G
       CONAN_HOME: ${{ github.workspace }}\.conan2
       CONAN_NON_INTERACTIVE: '1'
+      APP_BUILD_JOBS: 6
       BUILD_LTO: ${{ inputs.development_build && 'Off' || 'On' }}
 
     steps:
@@ -52,7 +63,7 @@ jobs:
           cache: true
           cache-key-prefix: Windows-QtCache-6.9.3-v2
           modules: qtimageformats qtshadertools
-          version: 6.9.3
+          version: ${{ env.QT_VERSION }}
 
       - name: Enable Developer Command Prompt
         uses: Chatterino/msvc-dev-cmd@v2.0.5
@@ -91,6 +102,14 @@ jobs:
           restore: false
           save: false
           max-size: 2G
+
+      - name: Stop empty compiler cache server before restoring files
+        shell: pwsh
+        run: |
+          if (Get-Process sccache -ErrorAction SilentlyContinue) {
+            sccache --stop-server
+            if ($LASTEXITCODE -ne 0) { throw 'Could not stop sccache before loading its disk cache' }
+          }
 
       - name: Restore compiler base
         id: compiler-base
@@ -186,10 +205,11 @@ jobs:
           if (@(Get-ChildItem $env:SCCACHE_DIR -File -Recurse).Count -eq 0) {
             throw "The real project compile is not writing compiler cache data"
           }
-          python ../.CI/time-command.py --name cpp --output metrics/cpp.json -- cmake --build . --target chatterino-lib --parallel 4
-          if ($LASTEXITCODE -ne 0) { throw 'C++ compilation failed' }
-          python ../.CI/time-command.py --name link --output metrics/link.json -- cmake --build . --parallel 4
-          if ($LASTEXITCODE -ne 0) { throw 'Application linking failed' }
+          python ../.CI/time-command.py --name app --output metrics/app.json -- cmake --build . --parallel $env:APP_BUILD_JOBS
+          if ($LASTEXITCODE -ne 0) { throw 'Application compilation/linking failed' }
+          cd ..
+          python .CI/ninja-metrics.py
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read native compiler/link measurements' }
 
       - name: Verify compiler cache data
         if: always() && steps.sccache.outcome == 'success'
@@ -231,6 +251,7 @@ jobs:
         working-directory: build
         shell: pwsh
         run: |
+          $packageTimer = [Diagnostics.Stopwatch]::StartNew()
           New-Item -ItemType Directory Moltorino-Glass -Force | Out-Null
           Copy-Item bin/* Moltorino-Glass/ -Recurse -Exclude *.pdb
           windeployqt Moltorino-Glass/Moltorino7.exe --release --no-compiler-runtime --no-translations --no-opengl-sw --qmldir ../tools/glass-lab/qml --dir Moltorino-Glass/ --force-openssl
@@ -241,6 +262,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Media CRT deployment failed" }
           7z a Moltorino-Windows.zip Moltorino-Glass/
           if ($LASTEXITCODE -ne 0) { throw "ZIP creation failed" }
+          @{ stage = 'package'; seconds = [Math]::Round($packageTimer.Elapsed.TotalSeconds, 3); exitCode = 0 } | ConvertTo-Json | Set-Content metrics/package.json
 
       - name: Prepare native crash diagnostics
         shell: pwsh
@@ -320,6 +342,10 @@ jobs:
         if: inputs.benchmark_parallelism || contains(github.event.head_commit.message, '[benchmark-build]')
         shell: pwsh
         run: .\.CI\benchmark-parallel.ps1
+
+      - name: Summarize measured build stages
+        shell: pwsh
+        run: python .CI/summarize-build.py
 
       - name: Upload build measurements
         if: always()

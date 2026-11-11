@@ -27,7 +27,7 @@ if ($Mode -eq 'Resolve') {
 
 $metadata = Get-Content (Join-Path $DownloadDirectory 'metadata/build-source.json') -Raw | ConvertFrom-Json
 $current = python .CI/build-fingerprint.py | ConvertFrom-Json
-if ($metadata.sourceCommit -cne $env:VERIFIED_SOURCE_COMMIT -or !$metadata.lto -or $metadata.nightly -or $metadata.qtVersion -cne '6.9.3') {
+if ($metadata.sourceCommit -cne $env:VERIFIED_SOURCE_COMMIT -or !$metadata.lto -or $metadata.nightly -or $metadata.qtVersion -cne $env:QT_VERSION) {
     throw 'Package provenance/configuration does not match the selected successful production run'
 }
 if ($metadata.nativeFingerprint -cne $current.nativeFingerprint) {

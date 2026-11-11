@@ -4,7 +4,7 @@ $build = (Resolve-Path $BuildDirectory).Path
 $names = @('SplitInput.cpp', 'ChannelView.cpp', 'Split.cpp', 'SplitHeader.cpp', 'TwitchMessageBuilder.cpp', 'WindowManager.cpp', 'EmotePopup.cpp', 'SettingsDialog.cpp')
 $commands = Get-Content (Join-Path $build 'compile_commands.json') -Raw | ConvertFrom-Json
 $targets = @($commands | Where-Object { (Split-Path $_.file -Leaf) -in $names } | ForEach-Object {
-    if ($_.output) { $_.output } elseif ($_.command -match '/Fo([^\s]+)') { $Matches[1].Trim('"') }
+    if ($_.output) { if ([IO.Path]::IsPathRooted($_.output)) { [IO.Path]::GetRelativePath($build, $_.output) } else { $_.output } } elseif ($_.command -match '/Fo([^\s]+)') { $Matches[1].Trim('"') }
 })
 if ($targets.Count -lt 6) { throw 'Not enough real translation units for a parallelism comparison' }
 $results = @()
@@ -16,6 +16,7 @@ try {
         $timer = [Diagnostics.Stopwatch]::StartNew()
         $output = Join-Path $build "metrics/parallel-$jobs.log"
         $process = Start-Process ninja -ArgumentList (@('-C', $build, "-j$jobs") + $targets) -PassThru -NoNewWindow -RedirectStandardOutput $output -RedirectStandardError "$output.err"
+        $null = $process.Handle
         $minimumFreeMB = [double]::PositiveInfinity
         $peakCompilerMB = 0
         while (!$process.HasExited) {

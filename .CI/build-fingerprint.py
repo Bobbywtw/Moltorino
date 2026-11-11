@@ -1,6 +1,7 @@
 """Identify native app inputs independently of isolated QML/shader lab edits."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -12,7 +13,7 @@ inputs = subprocess.check_output([
 ])
 record = {"schema": 1, "nativeFingerprint": hashlib.sha256(inputs).hexdigest(),
           "sourceCommit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
-          "qtVersion": "6.9.3", "nightly": False, "lto": True,
+          "qtVersion": os.environ.get("QT_VERSION", "6.9.3"), "nightly": False, "lto": True,
           "configuration": "RelWithDebInfo"}
 if len(sys.argv) > 1:
     target = Path(sys.argv[1])

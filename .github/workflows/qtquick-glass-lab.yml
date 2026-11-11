@@ -7,13 +7,16 @@ on:
       - moltorino-build-optimization-01
     paths:
       - "tools/glass-lab/**"
+      - "!tools/glass-lab/qml/GlassIntegrationPreview.qml"
       - ".github/workflows/qtquick-glass-lab.yml"
       - ".CI/verify-glass-lab.ps1"
       - ".CI/glass-lab-checks.cpp"
       - ".CI/reuse-composer-package.ps1"
-      - "src/widgets/splits/SplitInput.*"
-      - "src/widgets/helper/ResizingTextEdit.*"
   workflow_dispatch:
+  workflow_call:
+
+env:
+  QT_VERSION: 6.9.3
 
 jobs:
   shader-preview-windows:
@@ -28,7 +31,7 @@ jobs:
       - name: Install Qt 6.9.3 ShaderTools
         uses: jurplel/install-qt-action@v4.3.1
         with:
-          version: 6.9.3
+          version: ${{ env.QT_VERSION }}
           modules: qtimageformats qtshadertools
           cache: true
           cache-key-prefix: Windows-QtCache-6.9.3-v2
