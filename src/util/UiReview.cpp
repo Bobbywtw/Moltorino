@@ -12,6 +12,7 @@
 #include "widgets/buttons/Button.hpp"
 #include "widgets/dialogs/EmotePopup.hpp"
 #include "widgets/dialogs/SettingsDialog.hpp"
+#include "widgets/dialogs/UserInfoPopup.hpp"
 #include "widgets/glass/GlassChrome.hpp"
 #include "widgets/helper/NotebookTab.hpp"
 #include "widgets/Notebook.hpp"
@@ -68,6 +69,39 @@ class ApplicationReview final : public QObject
         valid_ &= file.open(QIODevice::WriteOnly) &&
                   file.write(QJsonDocument(object).toJson()) > 0;
     }
+    void popout()
+    {
+        // No setData(): this exercises the real usercard shell without
+        // requesting a Twitch profile, logs, badges or moderation state.
+        auto *card = new UserInfoPopup(false, split_);
+        card->show();
+        card->move(window_->mapToGlobal(QPoint(80, 80)));
+        later(500, [this, card] {
+            save(card, "usercard");
+            if (glass::enabled())
+            {
+                const auto info = glass::diagnostics(card);
+                valid_ &= info["backdropSource"].toString() == "owner-window" &&
+                          info["ownerCaptureValid"].toBool();
+            }
+            card->move(window_->mapToGlobal(QPoint(210, 100)));
+            later(300, [this, card] {
+                save(card, "usercard-moved");
+                // Move completely beyond its owner. Old captured pixels and
+                // custom wallpaper must not be retained in the glass shell.
+                card->move(window_->mapToGlobal(
+                    QPoint(window_->width() + 80, window_->height() + 80)));
+                later(300, [this, card] {
+                    if (glass::enabled())
+                        valid_ &= !glass::diagnostics(card)["ownerCaptureValid"]
+                                       .toBool();
+                    card->close();
+                    write("composer.json", measurements_);
+                    qApp->exit(valid_ ? 0 : 1);
+                });
+            });
+        });
+    }
     void menu()
     {
         auto *header = split_->findChild<SplitHeader *>();
@@ -103,6 +137,9 @@ class ApplicationReview final : public QObject
                     return;
                 }
                 save(settings, "settings");
+                if (glass::enabled())
+                    for (auto *w : settings->findChildren<QWidget *>())
+                        valid_ &= !w->property("liquidGlassSurface").toBool();
                 settings->hide();
                 auto *emotes = new EmotePopup(window_);
                 emotes->loadChannel(std::make_shared<Channel>(
@@ -126,8 +163,7 @@ class ApplicationReview final : public QObject
                                           "Thanks for the stream!";
                         measurements_["textPreserved"] = text;
                         valid_ &= text;
-                        write("composer.json", measurements_);
-                        qApp->exit(valid_ ? 0 : 1);
+                        popout();
                     });
                 });
             });

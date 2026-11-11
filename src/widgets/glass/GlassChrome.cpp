@@ -11,6 +11,7 @@
 #    include "widgets/BasePopup.hpp"
 #    include "widgets/buttons/Button.hpp"
 #    include "widgets/dialogs/EmotePopup.hpp"
+#    include "widgets/dialogs/SettingsDialog.hpp"
 #    include "widgets/helper/ChannelView.hpp"
 #    include "widgets/helper/NotebookTab.hpp"
 #    include "widgets/splits/Split.hpp"
@@ -28,6 +29,7 @@
 #    include <QImage>
 #    include <QJsonArray>
 #    include <QLineEdit>
+#    include <QLabel>
 #    include <QMenu>
 #    include <QMouseEvent>
 #    include <QPainter>
@@ -37,14 +39,18 @@
 #    include <QQuickImageProvider>
 #    include <QQuickItem>
 #    include <QQuickWindow>
+#    include <QRegularExpression>
 #    include <QScrollArea>
 #    include <QSGRendererInterface>
 #    include <QStyle>
+#    include <QTabBar>
+#    include <QTextEdit>
 #    include <QTimer>
 #    include <QtQuickWidgets/QQuickWidget>
 #    include <QWindow>
 
 #    include <algorithm>
+#    include <atomic>
 #    include <memory>
 #    include <optional>
 
@@ -187,6 +193,37 @@ class Chrome;
 QList<Chrome *> layers;
 bool constructing = false;
 
+bool settingsWindow(const QWidget *window)
+{
+    return dynamic_cast<const SettingsDialog *>(window) != nullptr;
+}
+
+// Preserve semantic colors (badges, outcomes, selections) and all metrics.
+// Only dark opaque stylesheet fills become readable translucent panels.
+QString panelStyles(QString sheet)
+{
+    static const QRegularExpression fills(
+        QStringLiteral("(?<![-\\w])background(?:-color)?\\s*:\\s*(#[0-9a-fA-F]{3,8})\\s*;"));
+    auto matches = fills.globalMatch(sheet);
+    QList<QPair<int, QPair<int, QString>>> replacements;
+    while (matches.hasNext())
+    {
+        const auto match = matches.next();
+        QColor color(match.captured(1));
+        if (!color.isValid() || color.alpha() < 240 || color.lightnessF() > 0.3)
+            continue;
+        color.setAlpha(85);
+        replacements.append({int(match.capturedStart(1)),
+                             {int(match.capturedLength(1)),
+                              QString("rgba(%1,%2,%3,%4)")
+                                  .arg(color.red()).arg(color.green())
+                                  .arg(color.blue()).arg(color.alpha())}});
+    }
+    for (auto i = replacements.crbegin(); i != replacements.crend(); ++i)
+        sheet.replace(i->first, i->second.first, i->second.second);
+    return sheet;
+}
+
 // QMenu and Qt's tooltip label paint foreground directly on their window.
 // Replay that native paint ABOVE the GPU child without rendering children or
 // replacing actions, shortcuts, accessibility, submenu logic or hit testing.
@@ -241,14 +278,25 @@ public:
     QString videoSource;
     std::shared_ptr<ThemeVideo> video;
     QElapsedTimer videoThrottle;
-    int frames = 0;
+    std::atomic<int> frames{0};
+    bool capturing = false;
+    bool popupDirty = true;
+    bool ownedPopup = false;
+    QHash<QWidget *, QPair<QString, QString>> styled;
+    QList<QPointer<QWidget>> clearedBackgrounds;
+    QList<QPointer<ChannelView>> transparentViews;
     QList<QRectF> wallpaperGeometry;
     explicit Chrome(QWidget *parent)
         : QQuickWidget(parent)
     {
         // Popovers refract only pixels of their owning Moltorino window.
         // This capture stays in memory, is never saved, and never reads the desktop.
-        if (parent->windowType() == Qt::Popup ||
+        if (!parent->inherits("chatterino::Window") &&
+            !settingsWindow(parent))
+        {
+            ownedPopup = true;
+        }
+        if (ownedPopup || parent->windowType() == Qt::Popup ||
             parent->windowType() == Qt::ToolTip ||
             qobject_cast<QMenu *>(parent) ||
             dynamic_cast<BasePopup *>(parent) ||
@@ -257,6 +305,20 @@ public:
             auto *owner = parent->parentWidget()
                               ? parent->parentWidget()->window()
                               : QApplication::activeWindow();
+            // Show events often arrive after the popup became active. Resolve
+            // its transient owner rather than capturing the popup itself.
+            if ((!owner || owner == parent) && parent->windowHandle() &&
+                parent->windowHandle()->transientParent())
+                owner = QWidget::find(parent->windowHandle()
+                                          ->transientParent()->winId());
+            if (!owner || owner == parent)
+                for (auto *candidate : QApplication::topLevelWidgets())
+                    if (candidate != parent && candidate->isVisible() &&
+                        candidate->inherits("chatterino::Window"))
+                    {
+                        owner = candidate;
+                        break;
+                    }
             if (owner && owner != parent && owner->isVisible())
             {
                 popupOwner = owner;
@@ -327,18 +389,39 @@ public:
     }
     void capturePopupBackdrop()
     {
+        if (capturing || !popupDirty || isAppAboutToQuit() || !tryGetApp())
+            return;
+        popupDirty = false;
         if (!popupOwner || !popupOwner->isVisible() ||
             popupOwner->isMinimized())
+        {
+            if (!popupBackdrop.isNull())
+            {
+                popupBackdrop = {};
+                backdropKey.clear();
+                request();
+            }
             return;
+        }
         const auto origin =
             popupOwner->mapFromGlobal(parentWidget()->mapToGlobal(QPoint()));
         const auto region = QRect(origin, parentWidget()->size())
                                 .intersected(popupOwner->rect());
         if (region.isEmpty())
+        {
+            if (!popupBackdrop.isNull())
+            {
+                popupBackdrop = {};
+                backdropKey.clear();
+                request();
+            }
             return;
+        }
         const auto offset = parentWidget()->mapFromGlobal(
             popupOwner->mapToGlobal(region.topLeft()));
+        capturing = true;
         auto pixels = popupOwner->grab(region).toImage();
+        capturing = false;
         if (pixels == popupBackdrop && offset == popupBackdropOrigin)
             return;
         popupBackdrop = std::move(pixels);
@@ -356,6 +439,22 @@ public:
             hide();
             if (foreground)
                 foreground->hide();
+            for (auto i = styled.cbegin(); i != styled.cend(); ++i)
+                if (i.key()->styleSheet() == i.value().second)
+                    i.key()->setStyleSheet(i.value().first);
+            for (const auto &w : clearedBackgrounds)
+                if (w)
+                    w->setAutoFillBackground(true);
+            for (const auto &view : transparentViews)
+                if (view)
+                    view->setTransparentBackground(false);
+            for (auto *w : parentWidget()->findChildren<QWidget *>())
+            {
+                w->setProperty("liquidGlassSurface", false);
+                w->style()->unpolish(w);
+                w->style()->polish(w);
+                w->update();
+            }
             parentWidget()->setAutoFillBackground(true);
             const auto bg = getTheme()->window.background.name();
             parentWidget()->setStyleSheet(
@@ -381,12 +480,13 @@ public:
     void updateBackdrop()
     {
         const auto &profile = getTheme()->customization;
-        if (videoSource != profile.wallpaperSource)
+        const auto source = ownedPopup ? QString() : profile.wallpaperSource;
+        if (videoSource != source)
         {
             if (video)
                 video->detach(this);
             video.reset();
-            videoSource = profile.wallpaperSource;
+            videoSource = source;
             if (isThemeVideo(videoSource))
             {
                 video = ThemeVideo::acquire(videoSource, this);
@@ -433,7 +533,7 @@ public:
                                 : getTheme()->window.background;
         image.fill(canvas);
         QPainter p(&image);
-        auto wallpaper = profile.wallpaperSource.isEmpty() || video
+        auto wallpaper = ownedPopup || profile.wallpaperSource.isEmpty() || video
                              ? QImage()
                              : loadThemeWallpaper(profile.wallpaperSource);
         if (!wallpaper.isNull())
@@ -505,7 +605,12 @@ public:
         if (!popupBackdrop.isNull())
         {
             p.drawImage(popupBackdropOrigin, popupBackdrop);
-            p.fillRect(rect(), QColor(0, 0, 0, 65));
+            // Tint only the captured portion; do not invent wallpaper outside
+            // the owner window or retain stale pixels after moving off it.
+            p.fillRect(QRectF(popupBackdropOrigin,
+                              QSizeF(popupBackdrop.size()) /
+                                  popupBackdrop.devicePixelRatio()),
+                       QColor(0, 0, 0, 40));
         }
         p.end();
         backdrop->image = std::move(image);
@@ -529,23 +634,73 @@ public:
             panels.put(parentWidget(),
                        parentWidget()->rect().adjusted(1, 1, -1, -1), "window",
                        0.);
-        const auto controls = parentWidget()->findChildren<QWidget *>();
+        const bool settings = settingsWindow(parentWidget());
+        auto controls = parentWidget()->findChildren<QWidget *>();
+        controls.prepend(parentWidget());
         for (auto *w : controls)
         {
             if (w->window() != parentWidget() || !w->isVisible() || w == this ||
                 w == foreground || isAncestorOf(w))
                 continue;
+            if (settings)
+                continue;
+            // ChannelView owns native chat text, fonts, colors and badges.
+            // Popout histories use the GPU shell's mapped owner backdrop.
+            if (auto *view = dynamic_cast<ChannelView *>(w))
+            {
+                if (ownedPopup && !view->getTransparentBackground())
+                {
+                    transparentViews.append(view);
+                    view->setTransparentBackground(true);
+                }
+                continue;
+            }
+            bool chatChild = false;
+            for (auto *p = w->parentWidget(); p && p != parentWidget();
+                 p = p->parentWidget())
+                if (dynamic_cast<ChannelView *>(p))
+                    chatChild = true;
+            if (chatChild)
+                continue;
+            // Clear inherited opaque palette fills only where a real GPU
+            // layer is available. Do not modify semantic palette colors.
+            if (w->autoFillBackground())
+            {
+                clearedBackgrounds.append(w);
+                w->setAutoFillBackground(false);
+            }
+            const auto current = w->styleSheet();
+            if (!current.isEmpty() &&
+                (!styled.contains(w) || styled.value(w).second != current))
+            {
+                const auto material = panelStyles(current);
+                if (!styled.contains(w))
+                    connect(w, &QObject::destroyed, this, [this, w] {
+                        styled.remove(w);
+                    });
+                styled[w] = {current, material};
+                if (material != current)
+                    w->setStyleSheet(material);
+            }
+            if (auto *label = qobject_cast<QLabel *>(w))
+            {
+                auto font = label->font();
+                if (font.weight() < QFont::DemiBold)
+                {
+                    font.setWeight(QFont::DemiBold);
+                    label->setFont(font);
+                }
+            }
+            if (auto *tabs = qobject_cast<QTabBar *>(w))
+            {
+                // Native tabs retain their selected/hover states and keys.
+                panels.put(tabs, tabs->rect(), "toolbar", 0.);
+            }
             if (auto *scroll = qobject_cast<QScrollArea *>(w))
             {
                 scroll->viewport()->setAutoFillBackground(false);
                 if (scroll->widget())
                     scroll->widget()->setAutoFillBackground(false);
-            }
-            if (dynamic_cast<EmotePopup *>(parentWidget()))
-            {
-                if (auto *view = dynamic_cast<ChannelView *>(w);
-                    view && !view->getTransparentBackground())
-                    view->setTransparentBackground(true);
             }
             if (dynamic_cast<Button *>(w) && !dynamic_cast<NotebookTab *>(w))
             {
@@ -565,7 +720,8 @@ public:
                 }
             }
             else if (qobject_cast<QLineEdit *>(w) ||
-                     qobject_cast<QComboBox *>(w))
+                     qobject_cast<QComboBox *>(w) ||
+                     qobject_cast<QTextEdit *>(w))
             {
                 panels.put(w, QRectF(w->rect()).adjusted(1, 1, -1, -1), "field",
                            w->hasFocus() ? 1. : 0.);
@@ -614,6 +770,14 @@ class ChromeEvents final : public QObject
         if (!w || constructing || w->inherits("QQuickWidget") ||
             w->objectName() == "moltorinoGpuChrome")
             return false;
+        if (event->type() == QEvent::Paint || event->type() == QEvent::Move ||
+            event->type() == QEvent::Resize || event->type() == QEvent::Show ||
+            event->type() == QEvent::Hide)
+            for (auto *popup : layers)
+                if (!popup->capturing &&
+                    (popup->popupOwner == w->window() ||
+                     popup->parentWidget() == w))
+                    popup->popupDirty = true;
         if (event->type() == QEvent::Show && w->isWindow() && !layer(w) &&
             !w->inherits("QDesktopWidget") &&
             (w->windowFlags() & Qt::WindowType_Mask) != Qt::ForeignWindow)
@@ -733,7 +897,10 @@ QJsonObject diagnostics(QWidget *window)
         static_cast<int>(c->quickWindow()->rendererInterface()->graphicsApi());
     result["qmlReady"] = c->status() == QQuickWidget::Ready;
     result["backdropRevision"] = c->revision;
-    result["renderedFrames"] = c->frames;
+    result["renderedFrames"] = c->frames.load();
+    result["backdropSource"] = c->ownedPopup ? "owner-window" : "chat-wallpaper";
+    result["ownerCaptureValid"] = !c->popupBackdrop.isNull();
+    result["settingsControlsPreserved"] = settingsWindow(window);
     QJsonObject baked;
     for (const auto &name : {"glass.vert.qsb", "glass.frag.qsb"})
     {

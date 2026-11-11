@@ -601,13 +601,6 @@ void BaseWindow::applySettingsStylesheet()
                            QStringLiteral("font-size: %1pt;")
                                .arg(appearance.interfaceFontSize));
     }
-    if (glass::enabled())
-    {
-        // Remove only opaque control fills; the material lives in Qt Quick.
-        stylesheet.replace(QRegularExpression(QStringLiteral(
-                               "background(?:-color)?\\s*:[^;}{]+;")),
-                           QStringLiteral("background: transparent;"));
-    }
     if (this->styleSheet() != stylesheet)
     {
         this->setStyleSheet(stylesheet);

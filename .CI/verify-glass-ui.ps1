@@ -64,7 +64,7 @@ foreach ($testCase in @(
     $env:CHATTERINO_LOG_TO_FILE = Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'startup.log'
     Invoke-Package @('--verbose')
     if ((Get-FileHash $settingsFile).Hash -ne $before) { throw "UI review modified the existing $theme settings fixture" }
-    foreach ($capture in @('chat.png', 'chat-hover.png', 'chat-pressed.png', 'chat-resized.png', 'menu.png', 'settings.png', 'emotes.png', 'dialog.png', 'composer.json', 'chrome.json')) {
+    foreach ($capture in @('chat.png', 'chat-hover.png', 'chat-pressed.png', 'chat-resized.png', 'menu.png', 'settings.png', 'emotes.png', 'dialog.png', 'usercard.png', 'usercard-moved.png', 'composer.json', 'chrome.json')) {
         if (!(Test-Path (Join-Path $env:MOLTORINO_UI_REVIEW_DIR $capture))) { throw "Missing native Qt capture: $theme/$capture" }
     }
     if (!$testCase.disableGpu) {

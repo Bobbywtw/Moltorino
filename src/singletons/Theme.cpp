@@ -1040,6 +1040,7 @@ void Theme::parseFrom(const QJsonObject &root, bool isCustomTheme)
             "QPushButton[liquidGlassSurface=true], "
             "QToolButton[liquidGlassSurface=true],"
             "QLineEdit[liquidGlassSurface=true], "
+            "QTextEdit[liquidGlassSurface=true], "
             "QComboBox[liquidGlassSurface=true]"
             " { background: transparent; border: 0; }");
     }
