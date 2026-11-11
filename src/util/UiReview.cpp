@@ -83,6 +83,30 @@ class ApplicationReview final : public QObject
                 const auto info = glass::diagnostics(card);
                 valid_ &= info["backdropSource"].toString() == "owner-window" &&
                           info["ownerCaptureValid"].toBool();
+                // The empty history area overlaps the fixture's dense chat.
+                // Sharp background glyphs previously passed the mapping check
+                // while making the card unreadable. Measure their edge contrast
+                // in an area with no foreground controls or card messages.
+                const auto pixels = card->grab().toImage();
+                const int left = int(pixels.width() * 0.35);
+                const int right = int(pixels.width() * 0.95);
+                const int top = int(pixels.height() * 0.55);
+                const int bottom = int(pixels.height() * 0.85);
+                double contrast = 0;
+                int samples = 0;
+                for (int y = top; y < bottom; ++y)
+                    for (int x = left; x + 1 < right; ++x)
+                    {
+                        const auto a = pixels.pixel(x, y);
+                        const auto b = pixels.pixel(x + 1, y);
+                        contrast += qAbs(qRed(a) - qRed(b)) +
+                                    qAbs(qGreen(a) - qGreen(b)) +
+                                    qAbs(qBlue(a) - qBlue(b));
+                        samples += 3;
+                    }
+                const double average = samples ? contrast / samples : 255.;
+                measurements_["usercardBackdropEdgeContrast"] = average;
+                valid_ &= average < 2.;
             }
             card->move(window_->mapToGlobal(QPoint(210, 100)));
             later(300, [this, card] {

@@ -622,13 +622,25 @@ public:
         }
         if (!popupBackdrop.isNull())
         {
-            p.drawImage(popupBackdropOrigin, popupBackdrop);
+            // The owner capture can contain live chat text. Diffuse that
+            // content before it reaches the shared optical shader so it cannot
+            // compete with the popup's native foreground labels and messages.
+            // Half-resolution filtering follows cached backdrop revisions,
+            // so hover events do not repeat it. The GPU shaders stay intact.
+            const QRectF captured(popupBackdropOrigin,
+                                  QSizeF(popupBackdrop.size()) /
+                                      popupBackdrop.devicePixelRatio());
+            auto diffuse = popupBackdrop.scaled(
+                QSize(std::max(1, popupBackdrop.width() / 2),
+                      std::max(1, popupBackdrop.height() / 2)),
+                Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            diffuse = blurThemeWallpaper(
+                std::move(diffuse),
+                qRound(8 * popupBackdrop.devicePixelRatio()));
+            p.drawImage(captured, diffuse, diffuse.rect());
             // Tint only the captured portion; do not invent wallpaper outside
             // the owner window or retain stale pixels after moving off it.
-            p.fillRect(QRectF(popupBackdropOrigin,
-                              QSizeF(popupBackdrop.size()) /
-                                  popupBackdrop.devicePixelRatio()),
-                       QColor(0, 0, 0, 40));
+            p.fillRect(captured, QColor(0, 0, 0, 55));
         }
         p.end();
         backdrop->image = std::move(image);
