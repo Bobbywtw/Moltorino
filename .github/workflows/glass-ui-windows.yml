@@ -6,10 +6,28 @@ on:
       - glass-ui-pass-01
       - liquid-glass-plugin-01
       - liquid-glass-integration-01
+      - moltorino-build-optimization-01
+    paths-ignore:
+      - 'tools/glass-lab/**'
+      - 'docs/**'
+      - '.github/workflows/qtquick-glass-lab.yml'
+      - '.CI/verify-glass-lab.ps1'
+      - '.CI/glass-lab-checks.cpp'
+      - '.CI/reuse-composer-package.ps1'
   workflow_dispatch:
+    inputs:
+      development_build:
+        description: 'Disposable app check (LTO off; not a production artifact)'
+        type: boolean
+        default: false
+      benchmark_parallelism:
+        description: 'Measure four versus six jobs on real C++ objects'
+        type: boolean
+        default: false
 
 env:
   CONAN_VERSION: 2.28.1
+  QT_VERSION: 6.9.3
 
 jobs:
   build-windows:
@@ -18,6 +36,9 @@ jobs:
     env:
       SCCACHE_DIR: ${{ github.workspace }}\.sccache
       SCCACHE_CACHE_SIZE: 2G
+      CONAN_HOME: ${{ github.workspace }}\.conan2
+      CONAN_NON_INTERACTIVE: '1'
+      BUILD_LTO: ${{ inputs.development_build && 'Off' || 'On' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -38,10 +59,28 @@ jobs:
         with:
           arch: x64
 
-      - name: Prepare persistent sccache directory
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install and identify Conan toolchain
+        id: toolchain
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path $env:SCCACHE_DIR -Force | Out-Null
+          pip install conan==$env:CONAN_VERSION
+          if ($LASTEXITCODE -ne 0) { throw 'Conan installation failed' }
+          conan profile detect -f
+          if ($LASTEXITCODE -ne 0) { throw 'Compiler detection failed' }
+          $compiler = (Get-Item (Get-Command cl.exe).Source).VersionInfo.FileVersion
+          $profile = Get-Content (Join-Path $env:CONAN_HOME 'profiles/default') -Raw
+          $inputs = "$compiler|$env:WindowsSDKVersion|$env:QT_VERSION|$env:CONAN_VERSION|$profile"
+          foreach ($file in @('conanfile.py', '.CI/windows-conan.profile')) { $inputs += Get-Content $file -Raw }
+          $fingerprint = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($inputs))).ToLower()
+          "fingerprint=$fingerprint" >> $env:GITHUB_OUTPUT
+          Write-Output "Compiler=$compiler; SDK=$env:WindowsSDKVersion; Qt=$env:QT_VERSION; cache fingerprint=$fingerprint"
+          Get-CimInstance Win32_ComputerSystem | Select-Object NumberOfLogicalProcessors, TotalPhysicalMemory | Format-List
+          New-Item -ItemType Directory $env:SCCACHE_DIR -Force | Out-Null
           Write-Output "SCCACHE_DIR=$env:SCCACHE_DIR"
 
       - name: Setup sccache
@@ -49,29 +88,40 @@ jobs:
         uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           variant: sccache
-          save: true
+          restore: false
+          save: false
           max-size: 2G
-          key: sccache-graphite-windows2022-x64-6.9.3-no-pch-v2
+
+      - name: Restore compiler base
+        id: compiler-base
+        uses: actions/cache/restore@v5
+        with:
+          key: win-sccache-base-v1-${{ steps.toolchain.outputs.fingerprint }}-${{ env.BUILD_LTO }}
+          path: ${{ env.SCCACHE_DIR }}
+
+      - name: Record compiler base entries
+        shell: pwsh
+        run: .\.CI\compiler-cache.ps1 Snapshot
+
+      - name: Restore changed compiler entries
+        if: steps.compiler-base.outputs.cache-hit == 'true'
+        id: compiler-overlay
+        uses: actions/cache/restore@v5
+        with:
+          key: win-sccache-overlay-v1-${{ steps.toolchain.outputs.fingerprint }}-${{ env.BUILD_LTO }}-${{ github.sha }}
+          restore-keys: win-sccache-overlay-v1-${{ steps.toolchain.outputs.fingerprint }}-${{ env.BUILD_LTO }}-
+          path: .sccache-overlay
+
+      - name: Apply changed compiler entries
+        shell: pwsh
+        run: .\.CI\compiler-cache.ps1 Overlay
 
       - name: Cache Conan packages
         id: conan-cache
         uses: actions/cache/restore@v5
         with:
-          key: Windows2022-X64-conan-user-${{ hashFiles('**/conanfile.py') }}-QT6-libwebm-conforming-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: Windows2022-X64-conan-user-${{ hashFiles('**/conanfile.py') }}-QT6-libwebm-conforming-
-          path: ~/.conan2/
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
-      - name: Install and setup Conan
-        shell: bash
-        run: |
-          pip install conan==${CONAN_VERSION}
-          conan --version
-          conan profile detect -f
+          key: win-conan-v1-${{ steps.toolchain.outputs.fingerprint }}
+          path: ${{ env.CONAN_HOME }}
 
       - name: Install dependencies
         id: dependencies
@@ -84,22 +134,18 @@ jobs:
           cd build
           # libwebm's nested MasterValueParser lookup needs conforming MSVC lookup.
           # A relative metadata path also works for native pkgconf inside MSYS.
-          conan install .. \
-              -s build_type=RelWithDebInfo \
-              -c tools.cmake.cmaketoolchain:generator="Ninja" \
-              -c 'libwebm/*:tools.build:cxxflags=["/permissive-"]' \
-              -c 'ffmpeg/*:tools.gnu:extra_configure_args=["--env=PKG_CONFIG_PATH=conan"]' \
-              -b missing \
-              -c tools.build:jobs=4 \
-              --output-folder=. \
-              -o with_openssl3=True
+          python ../.CI/time-command.py --name conan --output metrics/conan.json -- conan install .. \
+              -pr:h default -pr:h ../.CI/windows-conan.profile \
+              -b missing --output-folder=. -o with_openssl3=True \
+              --lockfile-out=conan.lock --format=json --out-file=conan-install.json
+          if [ $? -ne 0 ]; then exit 1; fi
           conan cache clean --source --build --download "*"
 
       - name: Show FFmpeg configure failure
         if: failure() && steps.dependencies.outcome == 'failure'
         shell: pwsh
         run: |
-          Get-ChildItem "$env:USERPROFILE/.conan2/p/b" -Filter config.log -Recurse |
+          Get-ChildItem "$env:CONAN_HOME/p/b" -Filter config.log -Recurse |
             Where-Object { $_.FullName -match 'ffbuild[\\/]config\.log$' } |
             ForEach-Object {
               Write-Output "FFmpeg configure log: $($_.FullName)"
@@ -107,24 +153,25 @@ jobs:
             }
 
       - name: Save Conan packages
-        if: always() && steps.conan-cache.outcome == 'success' && steps.dependencies.outcome != 'skipped'
+        if: steps.dependencies.outcome == 'success' && steps.conan-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
           key: ${{ steps.conan-cache.outputs.cache-primary-key }}
-          path: ~/.conan2/
+          path: ${{ env.CONAN_HOME }}
 
       - name: Build Moltorino
         shell: pwsh
         run: |
           cd build
           # MSVC /Fp and /Yc are not cacheable; compile without PCH for sccache.
-          cmake `
+          python ../.CI/time-command.py --name configure --output metrics/configure.json -- cmake `
               -G Ninja `
               -DCMAKE_BUILD_TYPE=RelWithDebInfo `
               -DCMAKE_TOOLCHAIN_FILE="conan_toolchain.cmake" `
               -DUSE_PRECOMPILED_HEADERS=Off `
               -DBUILD_WITH_CRASHPAD=Off `
-              -DCHATTERINO_LTO=On `
+              -DCHATTERINO_LTO=$env:BUILD_LTO `
+              -DCMAKE_EXPORT_COMPILE_COMMANDS=On `
               -DFORCE_JSON_GENERATION=Off `
               -DCHATTERINO_NIGHTLY_BUILD=Off `
               -DCHATTERINO_SPELLCHECK=On `
@@ -139,14 +186,17 @@ jobs:
           if (@(Get-ChildItem $env:SCCACHE_DIR -File -Recurse).Count -eq 0) {
             throw "The real project compile is not writing compiler cache data"
           }
-          cmake --build . --parallel 4
+          python ../.CI/time-command.py --name cpp --output metrics/cpp.json -- cmake --build . --target chatterino-lib --parallel 4
+          if ($LASTEXITCODE -ne 0) { throw 'C++ compilation failed' }
+          python ../.CI/time-command.py --name link --output metrics/link.json -- cmake --build . --parallel 4
+          if ($LASTEXITCODE -ne 0) { throw 'Application linking failed' }
 
       - name: Verify compiler cache data
         if: always() && steps.sccache.outcome == 'success'
         shell: pwsh
         run: |
           Write-Output "SCCACHE_DIR=$env:SCCACHE_DIR"
-          sccache --show-stats
+          sccache --show-stats | Tee-Object build/metrics/sccache.txt
           if (!(Test-Path -Path $env:SCCACHE_DIR -PathType Container)) {
             throw "sccache directory disappeared before post-job save"
           }
@@ -156,6 +206,26 @@ jobs:
           if ($files.Count -eq 0 -or $bytes -eq 0) {
             throw "No compiler cache data was written to SCCACHE_DIR"
           }
+
+      - name: Save compiler base
+        if: steps.compiler-base.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          key: ${{ steps.compiler-base.outputs.cache-primary-key }}
+          path: ${{ env.SCCACHE_DIR }}
+
+      - name: Prepare changed compiler cache
+        if: steps.compiler-base.outputs.cache-hit == 'true'
+        id: compiler-delta
+        shell: pwsh
+        run: .\.CI\compiler-cache.ps1 Stage
+
+      - name: Save changed compiler cache
+        if: steps.compiler-delta.outputs.entries != '0' && steps.compiler-delta.outcome == 'success' && steps.compiler-overlay.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          key: ${{ steps.compiler-overlay.outputs.cache-primary-key }}
+          path: .sccache-overlay
 
       - name: Prepare Windows ZIP build
         working-directory: build
@@ -236,10 +306,37 @@ jobs:
           overwrite: true
           retention-days: 14
 
+      - name: Record verified build inputs
+        shell: pwsh
+        run: |
+          python .CI/build-fingerprint.py build/build-source.json
+          if ($env:BUILD_LTO -ne 'On') {
+            $metadata = Get-Content build/build-source.json -Raw | ConvertFrom-Json
+            $metadata.lto = $false
+            $metadata | ConvertTo-Json | Set-Content build/build-source.json
+          }
+
+      - name: Benchmark compiler parallelism
+        if: inputs.benchmark_parallelism || contains(github.event.head_commit.message, '[benchmark-build]')
+        shell: pwsh
+        run: .\.CI\benchmark-parallel.ps1
+
+      - name: Upload build measurements
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: Moltorino-Build-Metadata
+          path: |
+            build/build-source.json
+            build/metrics/
+            build/conan.lock
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload Glass UI Windows build
         uses: actions/upload-artifact@v7
         with:
-          name: Moltorino-Windows
+          name: ${{ inputs.development_build && 'Moltorino-Development-Windows' || 'Moltorino-Windows' }}
           overwrite: true
           path: build/Moltorino-Windows.zip
           retention-days: 14

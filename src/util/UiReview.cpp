@@ -18,6 +18,9 @@
 #include <QAction>
 #include <QApplication>
 #include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMenu>
 #include <QPainter>
 #include <QTimer>
@@ -110,19 +113,67 @@ void scheduleUiReview()
         notebook.select(page);
         getApp()->getWindows()->forceLayoutChannelViews();
         window.show();
-        QTimer::singleShot(700, qApp, [output, &window] {
+        QTimer::singleShot(700, qApp, [output, &window, split] {
             QDir().mkpath(output);
             const auto saved = window.grab().save(output + "/chat.png");
-            QMenu menu;
-            menu.addAction("Open channel");
-            menu.addAction("Copy channel address");
-            menu.addSeparator();
-            menu.addAction("Channel settings");
-            menu.addAction("Unavailable action")->setEnabled(false);
-            menu.ensurePolished();
-            menu.resize(menu.sizeHint());
-            const auto menuSaved = menu.grab().save(output + "/menu.png");
-            qApp->exit(saved && menuSaved ? 0 : 1);
+            const auto single = split->getInput().height();
+            split->getInput().setInputText(
+                "First line\nSecond line\nThird line");
+            QTimer::singleShot(
+                200, qApp, [output, &window, split, single, saved] {
+                    const auto multiline = split->getInput().height();
+                    split->getInput().setInputText("Thanks for the stream!");
+                    window.resize(720, 560);
+                    QTimer::singleShot(
+                        200, qApp,
+                        [output, &window, split, single, multiline, saved] {
+                            const auto narrow = split->getInput().height();
+                            const auto resized = window.grab().save(
+                                output + "/chat-resized.png");
+                            window.resize(1180, 760);
+                            QTimer::singleShot(
+                                200, qApp,
+                                [output, &window, split, single, multiline,
+                                 narrow, saved, resized] {
+                                    const auto restored =
+                                        split->getInput().height();
+                                    QMenu menu;
+                                    menu.addAction("Open channel");
+                                    menu.addAction("Copy channel address");
+                                    menu.addSeparator();
+                                    menu.addAction("Channel settings");
+                                    menu.addAction("Unavailable action")
+                                        ->setEnabled(false);
+                                    menu.ensurePolished();
+                                    menu.resize(menu.sizeHint());
+                                    const auto menuSaved =
+                                        menu.grab().save(output + "/menu.png");
+                                    const auto textPreserved =
+                                        split->getInput().getInputText() ==
+                                        "Thanks for the stream!";
+                                    QJsonObject measurements{
+                                        {"singleLineHeight", single},
+                                        {"multilineHeight", multiline},
+                                        {"narrowHeight", narrow},
+                                        {"restoredHeight", restored},
+                                        {"textPreserved", textPreserved}};
+                                    QFile file(output + "/composer.json");
+                                    const auto written =
+                                        file.open(QIODevice::WriteOnly) &&
+                                        file.write(QJsonDocument(measurements)
+                                                       .toJson()) > 0;
+                                    qApp->exit(
+                                        saved && resized && menuSaved &&
+                                                written && single > 0 &&
+                                                narrow > 0 &&
+                                                multiline > single &&
+                                                qAbs(restored - single) <= 2 &&
+                                                textPreserved
+                                            ? 0
+                                            : 1);
+                                });
+                        });
+                });
         });
     });
 }

@@ -59,9 +59,12 @@ foreach ($testCase in @(
     $env:CHATTERINO_LOG_TO_FILE = Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'startup.log'
     Invoke-Package @('--verbose')
     if ((Get-FileHash $settingsFile).Hash -ne $before) { throw "UI review modified the existing $theme settings fixture" }
-    foreach ($capture in @('chat.png', 'menu.png')) {
+    foreach ($capture in @('chat.png', 'chat-resized.png', 'menu.png', 'composer.json')) {
         if (!(Test-Path (Join-Path $env:MOLTORINO_UI_REVIEW_DIR $capture))) { throw "Missing native Qt capture: $theme/$capture" }
     }
+    $composer = Get-Content (Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'composer.json') -Raw | ConvertFrom-Json
+    Write-Output ($composer | ConvertTo-Json -Compress)
+    if (!$composer.textPreserved -or $composer.multilineHeight -le $composer.singleLineHeight -or [Math]::Abs($composer.restoredHeight - $composer.singleLineHeight) -gt 2) { throw 'Composer resize/multiline regression' }
     Write-Output "Existing $theme profile loaded; settings unchanged; native widget captures saved."
 }
 Remove-Item Env:MOLTORINO_UI_REVIEW_DIR
