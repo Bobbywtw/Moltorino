@@ -1,0 +1,83 @@
+name: Moltorino Qt Quick Glass Lab
+on:
+  push:
+    branches:
+      - qtquick-liquid-glass-01
+    paths:
+      - "tools/glass-lab/**"
+      - ".github/workflows/qtquick-glass-lab.yml"
+  workflow_dispatch:
+
+jobs:
+  shader-preview-windows:
+    name: Compile GPU shader and capture on Windows
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      - name: Install Qt 6.9.3 ShaderTools
+        uses: jurplel/install-qt-action@v4.3.1
+        with:
+          version: 6.9.3
+          modules: qtshadertools
+          cache: true
+          cache-key-prefix: Moltorino-QtQuick-Shader-Lab-v1
+
+      - name: Enable MSVC compiler
+        uses: Chatterino/msvc-dev-cmd@v2.0.5
+        with:
+          arch: x64
+
+      - name: Configure standalone lab
+        shell: pwsh
+        run: |
+          cmake -S tools/glass-lab -B build/glass-lab -G Ninja -DCMAKE_BUILD_TYPE=Release
+          if ($LASTEXITCODE -ne 0) { throw 'Lab CMake configure failed' }
+
+      - name: Compile Qt Quick and QSB shaders
+        shell: pwsh
+        run: |
+          cmake --build build/glass-lab --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Lab shader compilation failed' }
+
+      - name: Deploy Qt runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path build/glass-lab-dist -Force | Out-Null
+          Copy-Item build/glass-lab/MoltorinoGlassLab.exe build/glass-lab-dist/
+          windeployqt build/glass-lab-dist/MoltorinoGlassLab.exe --release --qmldir tools/glass-lab/qml --dir build/glass-lab-dist --no-compiler-runtime
+          if ($LASTEXITCODE -ne 0) { throw 'Qt deployment failed' }
+
+      - name: Capture actual Qt Quick rendering
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path build/lab-review -Force | Out-Null
+          & build/glass-lab-dist/MoltorinoGlassLab.exe --baseline --capture build/lab-review/baseline.png
+          if ($LASTEXITCODE -ne 0) { throw 'Baseline capture failed' }
+          & build/glass-lab-dist/MoltorinoGlassLab.exe --capture build/lab-review/glass.png
+          if ($LASTEXITCODE -ne 0) { throw 'Glass capture failed' }
+          foreach ($f in @('baseline.png', 'glass.png')) {
+            $path = "build/lab-review/$f"
+            if (!(Test-Path $path) -or (Get-Item $path).Length -lt 5000) { throw "Missing or empty capture: $f" }
+          }
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: Moltorino-GPU-Glass-Lab-Review
+          path: build/lab-review/*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload standalone lab
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: Moltorino-GPU-Glass-Lab-Windows
+          path: build/glass-lab-dist/
+          if-no-files-found: error
+          retention-days: 14
