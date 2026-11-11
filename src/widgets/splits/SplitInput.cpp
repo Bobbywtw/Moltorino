@@ -5015,7 +5015,18 @@ void SplitInput::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
     const auto &ui = uiPalette(this->theme->isLightTheme());
-    painter.fillRect(this->rect(), this->theme->splits.background);
+    const auto native = nativeglass::active(this->window());
+    painter.save();
+    if (native)
+    {
+        painter.setCompositionMode(QPainter::CompositionMode_Source);
+        painter.fillRect(this->rect(), Qt::transparent);
+    }
+    else
+    {
+        painter.fillRect(this->rect(), this->theme->splits.background);
+    }
+    painter.restore();
     painter.setRenderHint(QPainter::Antialiasing);
     const QRectF input(this->ui_.inputWrapper->geometry());
     paintGlassSurface(painter, this, input.adjusted(0.5, 0.5, -0.5, -0.5),
@@ -5023,7 +5034,8 @@ void SplitInput::paintEvent(QPaintEvent *)
                        .edge = GlassEdge::Bottom,
                        .radius = 7 * this->scale(),
                        .light = this->theme->isLightTheme(),
-                       .active = this->window()->isActiveWindow()},
+                       .active = this->window()->isActiveWindow(),
+                       .nativeBackdrop = native},
                       &this->split_->getChannelView());
     if (this->backgroundColor() != this->theme->splits.input.background)
     {
@@ -5046,7 +5058,8 @@ void SplitInput::paintEvent(QPaintEvent *)
                           {.role = GlassRole::Chrome,
                            .edge = GlassEdge::Bottom,
                            .radius = 4 * this->scale(),
-                           .light = this->theme->isLightTheme()},
+                           .light = this->theme->isLightTheme(),
+                           .nativeBackdrop = native},
                           &this->split_->getChannelView());
         painter.fillRect(
             QRectF(reply.left() + 3 * this->scale(),

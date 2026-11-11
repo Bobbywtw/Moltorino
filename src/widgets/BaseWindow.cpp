@@ -1303,9 +1303,15 @@ bool BaseWindow::handleSHOWWINDOW(MSG *msg)
 
         if (this->hasCustomWindowFrame())
         {
-
-            const MARGINS margins = {-1};
-            DwmExtendFrameIntoClientArea(msg->hwnd, &margins);
+            if (nativeglass::active(this))
+            {
+                updateNativeMaterial(this, !this->theme->isLightTheme());
+            }
+            else
+            {
+                const MARGINS margins = {-1};
+                DwmExtendFrameIntoClientArea(msg->hwnd, &margins);
+            }
         }
 
         if (!this->initalBounds_.isNull())

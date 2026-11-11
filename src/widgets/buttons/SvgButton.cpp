@@ -109,6 +109,11 @@ void SvgButton::setPadding(QSize padding)
     this->invalidateContent();
 }
 
+QSize SvgButton::padding() const
+{
+    return this->padding_;
+}
+
 void SvgButton::themeChangedEvent()
 {
     Button::themeChangedEvent();

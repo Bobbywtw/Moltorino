@@ -34,6 +34,7 @@
 #include "util/CustomPlayer.hpp"
 #include "util/IncognitoBrowser.hpp"
 #include "util/MultiChannel.hpp"
+#include "util/NativeGlass.hpp"
 #include "util/StreamLink.hpp"
 #include "widgets/ChatterListWidget.hpp"
 #include "widgets/dialogs/SelectChannelDialog.hpp"
@@ -43,7 +44,9 @@
 #include "widgets/helper/ChannelView.hpp"
 #include "widgets/helper/DebugPopup.hpp"
 #include "widgets/helper/NotebookTab.hpp"
+#include "widgets/helper/PinnedMessageBanner.hpp"
 #include "widgets/helper/PollBanner.hpp"
+#include "widgets/helper/PredictionBanner.hpp"
 #include "widgets/helper/ResizingTextEdit.hpp"
 #include "widgets/helper/SearchPopup.hpp"
 #include "widgets/Notebook.hpp"
@@ -53,8 +56,6 @@
 #include "widgets/splits/SplitContainer.hpp"
 #include "widgets/splits/SplitHeader.hpp"
 #include "widgets/splits/SplitInput.hpp"
-#include "widgets/helper/PinnedMessageBanner.hpp"
-#include "widgets/helper/PredictionBanner.hpp"
 #include "widgets/splits/SplitOverlay.hpp"
 #include "widgets/Window.hpp"
 
@@ -70,8 +71,8 @@
 #include <QMovie>
 #include <QPainter>
 #include <QSet>
-#include <QVector>
 #include <QVBoxLayout>
+#include <QVector>
 
 #include <functional>
 #include <optional>
@@ -2869,7 +2870,17 @@ void Split::paintEvent(QPaintEvent *)
     // color the background of the chat
     QPainter painter(this);
 
-    painter.fillRect(this->rect(), this->theme->splits.background);
+    if (nativeglass::active(this->window()))
+    {
+        // Child chat views paint their opaque reading surface. Leave only the
+        // surrounding chrome available to the native compositor.
+        painter.setCompositionMode(QPainter::CompositionMode_Source);
+        painter.fillRect(this->rect(), Qt::transparent);
+    }
+    else
+    {
+        painter.fillRect(this->rect(), this->theme->splits.background);
+    }
 }
 
 void Split::mouseMoveEvent(QMouseEvent *event)

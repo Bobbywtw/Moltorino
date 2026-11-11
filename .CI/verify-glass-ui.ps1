@@ -59,6 +59,8 @@ foreach ($theme in @('Dark', 'Glass', 'Moltorino Midnight', 'Light')) {
     }
     $material = Get-Content (Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'material-state.json') -Raw | ConvertFrom-Json
     Write-Output ($material | ConvertTo-Json -Depth 5 -Compress)
+    if ($material.effectsAllowed -and ($material.backdropCaptures -lt 1 -or $material.backdropGeneration -lt 2)) { throw 'Live chat backdrop was not sampled by the material renderer' }
+    if (@($material.buttons).Count -lt 1) { throw 'Composer icon check did not find a visible action' }
     if ($material.singleLineComposerHeight -gt 44) { throw "Oversized single-line composer: $($material.singleLineComposerHeight)" }
     if ($material.multilineComposerHeight -le $material.singleLineComposerHeight) { throw 'Composer no longer grows for multiline input' }
     foreach ($button in $material.buttons) {

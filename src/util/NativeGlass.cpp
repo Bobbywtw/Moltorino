@@ -68,8 +68,7 @@ bool effectsAllowed()
 void prepare(QWidget *window)
 {
 #ifdef Q_OS_WIN
-    if (supported() && effectsAllowed() &&
-        !window->windowFlags().testFlag(Qt::FramelessWindowHint))
+    if (supported() && !window->windowFlags().testFlag(Qt::FramelessWindowHint))
     {
         // Keep Moltorino's existing native frame and hit testing. Qt requests an
         // alpha backing store, without making this normally framed HWND layered.

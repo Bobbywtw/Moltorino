@@ -11,6 +11,7 @@
 #include "util/NativeGlass.hpp"
 #include "widgets/buttons/SvgButton.hpp"
 #include "widgets/helper/ChannelView.hpp"
+#include "widgets/helper/GlassMaterial.hpp"
 #include "widgets/helper/NotebookTab.hpp"
 #include "widgets/Notebook.hpp"
 #include "widgets/splits/Split.hpp"
@@ -123,6 +124,8 @@ void scheduleUiReview()
             auto &input = split->getInput();
             const auto singleHeight = input.height();
             const auto scale = input.scale();
+            const auto *backdrop =
+                GlassBackdrop::watch(&split->getChannelView());
             QJsonArray buttons;
             for (auto *button : input.findChildren<SvgButton *>())
             {
@@ -144,6 +147,10 @@ void scheduleUiReview()
                  window.property("_moltorino_dwmResult").toString()},
                 {"dwmType", window.property("_moltorino_dwmType").toInt()},
                 {"singleLineComposerHeight", singleHeight / scale},
+                {"backdropCaptures",
+                 static_cast<qint64>(backdrop->captureCount())},
+                {"backdropGeneration",
+                 static_cast<qint64>(backdrop->generation())},
                 {"buttons", buttons}};
             input.setInputText("First line\nSecond line\nThird line");
             QTimer::singleShot(
