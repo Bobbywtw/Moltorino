@@ -1,45 +1,31 @@
-# Moltorino Shader Lab — proof before any integration
+# Moltorino Qt Quick glass lab — optical surface test
 
-This intentionally standalone Qt Quick `.qsb` shader prototype uses **app-owned
-background content**, NOT Windows desktop capture, and does not alter the real
-Moltorino binary, chats, profiles, or settings.
+This is an isolated Qt 6.9 shader lab, not an actual Moltorino chat build.
+The app uses `QQuickView` and compiled `.qsb` vertex and fragment shaders,
+with actual in-app texture sampling from a backdrop **outside the glass
+foreground's capture tree**. There is no desktop or other-window capture.
 
-## Why no DXGI Desktop Duplication
-Microsoft's DXGI duplication API returns the *composed* desktop texture.
-It does not expose the unobstructed windows/wallpaper beneath our own opaque
-window. Capturing the composed image and rendering it back onto our window
-would also risk recursive self-capture. There is no documented sub-1ms latency
-guarantee. WM_MOVE is a position notification, not a synchronization primitive
-for DXGI, and must not trigger synchronous GPU blocking on the UI thread.
+## Revision 3 — stronger material test
 
-References:
-- https://learn.microsoft.com/en-us/windows-hardware/drivers/display/desktop-duplication-api
-- https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_2/nf-dxgi1_2-idxgioutputduplication-acquirenextframe
-- https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-move
+- Neutral graphite scene with a detailed 24px grid, distinct concentric circles,
+  sharp typography and two inherited accent colors to reveal color vibrancy
+- Rounded rectangle signed-distance meniscus with a 26px edge shell;
+  maximum displaced pixels are visibly bent at edges while the center stays crisp
+- Nine-tap approximation for backdrop diffusion (not multi-pass Gaussian)
+- Saturation adjustable from 1.0 to 1.65; default 1.45 is a visual choice,
+  **not a known or verifiable Apple material parameter**
+- Actual cursor-reactive rim reflections and a separate glossy ridge above composer
+- Clickable refraction, vibrancy and edge light values for easy live tuning
+- **LENS OFF** uses the same geometry and background but bypasses all
+  refraction, blur, vibrancy and specular material calculations in the shader
+- Drag motion drives a short easing parallax displacement (no desktop capture)
 
-## What the lab tests
+## How to inspect
 
-- Qt Quick scene graph, Vulkan-style GLSL, build-time `qsb` compilation
-- ShaderEffectSource capturing an isolated app-owned backdrop
-- Real pixel texture displacement at panel edges (not a painted border)
-- Five-tap approximation to diffusion, adjustable vibrancy up to 1.5
-- Cursor-reactive specular highlight and movement-driven parallax
-- Baseline-vs-shader screenshot capture from the real running application
+Run `MoltorinoGlassLab.exe` from the dedicated build artifact. Compare ON
+against OFF. Wave the cursor near a panel perimeter and drag the window.
+The GitHub workflow publishes real baseline and glass Qt Quick screenshots.
 
-It is not a 1:1 Apple compositor or macOS Liquid Glass clone; Apple's actual
-material algorithms are proprietary. The `vibrancy` factor is an aesthetic
-tuning parameter, not a published Apple standard.
-
-## Local Windows build (Qt 6.9.3 with ShaderTools)
-
-```powershell
-cmake -S tools/glass-lab -B build/glass-lab -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build/glass-lab --parallel 2
-build/glass-lab/MoltorinoGlassLab.exe --baseline --capture baseline.png
-build/glass-lab/MoltorinoGlassLab.exe --capture glass.png
-```
-
-The dedicated GitHub workflow builds **only this small lab**, not the full
-Moltorino client. It publishes Windows screenshots separately. Do not introduce
-the native QQuickView inside Moltorino splits until the captures are visibly
-different and the shader is confirmed to render on a GPU backend.
+This is an optical prototype only. Apple's compositor and proprietary glass
+algorithms are not reproduced; screenshots and a visually strong result must
+be verified before integrating the shader into the working Moltorino client.

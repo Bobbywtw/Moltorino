@@ -4,18 +4,20 @@ Item {
     id: pane
     required property Item backgroundLayer
     property bool active: true
-    property real strength: 1.0
-    property real saturation: 1.28
-    property real gloss: 0.9
+    property real strength: 1.3
+    property real saturation: 1.42
+    property real gloss: 2.35
     property real motionX: 0.0
     property real motionY: 0.0
     property point cursorUV: Qt.point(-2, -2)
-    readonly property real inset: 16
+
+    // UV displacement (up to 29px at maximum strength) and movement padding.
+    readonly property real inset: 44
     readonly property int textureWidth: Math.max(1, Math.ceil(width + inset * 2))
     readonly property int textureHeight: Math.max(1, Math.ceil(height + inset * 2))
 
     ShaderEffectSource {
-        id: backdrop
+        id: isolatedBackdrop
         visible: false
         sourceItem: pane.backgroundLayer
         sourceRect: {
@@ -29,23 +31,13 @@ Item {
         recursive: false
     }
 
-    Rectangle {
-        anchors.fill: parent
-        radius: 14
-        color: "#282d35"
-        border.color: "#59636e"
-        border.width: 1
-        visible: !pane.active
-    }
-
     ShaderEffect {
         anchors.fill: parent
-        visible: pane.active
-        objectName: "realTextureGlass"
+        objectName: "meniscusRefractiveGlass"
         vertexShader: "qrc:/shaders/glass.vert.qsb"
         fragmentShader: "qrc:/shaders/glass.frag.qsb"
         blending: true
-        property var source: backdrop
+        property var source: isolatedBackdrop
         property real refractionStrength: pane.strength
         property real vibrancy: pane.saturation
         property real specularGloss: pane.gloss
@@ -54,6 +46,7 @@ Item {
         property point pointerUV: pane.cursorUV
         property point parallaxPixels: Qt.point(pane.motionX, pane.motionY)
         property real sourceInset: pane.inset
+        property real lensEnabled: pane.active ? 1.0 : 0.0
 
         onStatusChanged: {
             if (status === ShaderEffect.Error)
