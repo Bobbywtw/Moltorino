@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QImage>
 #include <QQuickItem>
 #include <QQuickView>
 #include <QSGRendererInterface>
