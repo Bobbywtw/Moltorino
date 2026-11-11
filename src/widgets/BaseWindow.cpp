@@ -14,6 +14,7 @@
 #include "widgets/buttons/LabelButton.hpp"
 #include "widgets/buttons/TitlebarButton.hpp"
 #include "widgets/buttons/TitlebarButtons.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 #include "widgets/helper/SettingsTheme.hpp"
 #include "widgets/Label.hpp"
 #include "widgets/Window.hpp"
@@ -21,7 +22,9 @@
 #include <QApplication>
 #include <QFile>
 #include <QFont>
+#include <QHBoxLayout>
 #include <QIcon>
+#include <QRegularExpression>
 #include <QScreen>
 #include <QWindow>
 
@@ -597,6 +600,13 @@ void BaseWindow::applySettingsStylesheet()
         stylesheet.replace(QStringLiteral("font-size: 14px;"),
                            QStringLiteral("font-size: %1pt;")
                                .arg(appearance.interfaceFontSize));
+    }
+    if (glass::enabled())
+    {
+        // Remove only opaque control fills; the material lives in Qt Quick.
+        stylesheet.replace(QRegularExpression(QStringLiteral(
+                               "background(?:-color)?\\s*:[^;}{]+;")),
+                           QStringLiteral("background: transparent;"));
     }
     if (this->styleSheet() != stylesheet)
     {
@@ -1189,6 +1199,17 @@ void BaseWindow::calcButtonsSizes()
 
 void BaseWindow::drawCustomWindowFrame(QPainter &painter)
 {
+    if (glass::available(this))
+    {
+#ifdef USEWINSDK
+        if (this->ui_.titlebarBox)
+            glass::surface(this,
+                           QRectF(this->ui_.titlebarBox->geometry())
+                               .adjusted(3, 2, -3, -1),
+                           "toolbar");
+#endif
+        return;
+    }
 #ifdef USEWINSDK
     if (this->hasCustomWindowFrame())
     {

@@ -5,6 +5,7 @@
 #include "widgets/helper/SettingsDialogTab.hpp"
 
 #include "widgets/dialogs/SettingsDialog.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 #include "widgets/helper/SettingsTheme.hpp"
 #include "widgets/settingspages/SettingsPage.hpp"
 
@@ -53,7 +54,7 @@ void SettingsDialogTab::themeChangedEvent()
 {
     const auto &appearance = settingsTheme();
     this->setStyleSheet(QStringLiteral("background:%1; color:%2;")
-                            .arg(this->selected_
+                            .arg(this->selected_ && !glass::enabled()
                                      ? appearance.selectionSurface.name()
                                      : QStringLiteral("transparent"),
                                  this->selected_ ? appearance.accent.name()
@@ -84,7 +85,9 @@ void SettingsDialogTab::paintEvent(QPaintEvent *)
     QStyleOption opt;
     opt.initFrom(this);
 
-    this->style()->drawPrimitive(QStyle::PE_Widget, &opt, &painter, this);
+    if (!glass::surface(this, QRectF(this->rect()).adjusted(3, 2, -3, -2),
+                        "tab", this->selected_ ? 1.0 : 0.0))
+        this->style()->drawPrimitive(QStyle::PE_Widget, &opt, &painter, this);
 
     const auto baseIconSize =
         static_cast<int>(std::lround(20.F * this->scale()));

@@ -9,7 +9,9 @@ import sys
 inputs = subprocess.check_output([
     "git", "ls-tree", "-r", "HEAD", "--", "src", "lib", "cmake", "resources",
     "CMakeLists.txt", "conanfile.py", ".gitmodules", "tools/support",
-    "tools/crash-handler",
+    "tools/crash-handler", "tools/glass-lab/qml/GlassChrome.qml",
+    "tools/glass-lab/qml/LiquidGlassPanel.qml", "tools/glass-lab/shaders",
+
 ])
 record = {"schema": 1, "nativeFingerprint": hashlib.sha256(inputs).hexdigest(),
           "sourceCommit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),

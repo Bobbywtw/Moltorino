@@ -49,6 +49,7 @@
 #include "widgets/dialogs/PredictionDialog.hpp"
 #include "widgets/dialogs/UserInfoPopup.hpp"
 #include "widgets/dialogs/VanityDialog.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 #if MOLTORINO_ENABLE_CHANNEL_POINT_REWARDS
 #    include "widgets/dialogs/ChannelPointsDialog.hpp"
 #endif
@@ -2412,9 +2413,9 @@ void SplitInput::themeChangedEvent()
 void SplitInput::updateEmoteButton()
 {
     auto scale = this->scale();
-    const bool enabled = getSettings()->glassSkinEnabled;
+    const bool enabled = glass::enabled();
     const int x = enabled ? 6 : 8;
-    const int y = enabled ? 4 : 6;
+    const int y = enabled ? 3 : 6;
     this->ui_.inputWrapper->setContentsMargins(
         int(std::round(x * scale)), int(std::round(y * scale)),
         int(std::round(x * scale)), int(std::round(y * scale)));
@@ -5006,11 +5007,11 @@ void SplitInput::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
     const auto &ui = uiPalette(this->theme->isLightTheme());
-    painter.fillRect(this->rect(), this->theme->splits.background);
+    if (!glass::available(this))
+        painter.fillRect(this->rect(), this->theme->splits.background);
     painter.setRenderHint(QPainter::Antialiasing);
     const QRectF input(this->ui_.inputWrapper->geometry());
-    if (!(getSettings()->glassSkinEnabled &&
-          glass::paint(painter, input, glass::Surface::Composer,
+    if (!(glass::paint(painter, input, glass::Surface::Composer,
                        this->focusProgress_, this->scale())))
     {
         painter.setBrush(this->backgroundColor());
@@ -5021,9 +5022,13 @@ void SplitInput::paintEvent(QPaintEvent *)
     if (this->enableInlineReplying_ && this->replyTarget_ != nullptr)
     {
         const QRectF reply(this->ui_.replyWrapper->geometry());
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(uiMix(ui.surface, ui.canvas, 0.3));
-        painter.drawRoundedRect(reply, 4 * this->scale(), 4 * this->scale());
+        if (!glass::surface(this, reply, "reply"))
+        {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(uiMix(ui.surface, ui.canvas, 0.3));
+            painter.drawRoundedRect(reply, 4 * this->scale(),
+                                    4 * this->scale());
+        }
         painter.fillRect(
             QRectF(reply.left() + 3 * this->scale(),
                    reply.top() + 5 * this->scale(), 2 * this->scale(),
@@ -5195,7 +5200,7 @@ bool SplitInput::shouldPreventInput(const QString &text) const
 
 int SplitInput::marginForTheme() const
 {
-    return std::max(1, int(4 * this->scale()));
+    return std::max(1, int((glass::enabled() ? 3 : 4) * this->scale()));
 }
 
 void SplitInput::applyOuterMargin()

@@ -7,6 +7,7 @@
 #include "common/UiPalette.hpp"
 #include "singletons/Theme.hpp"
 #include "util/FunctionEventFilter.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 
 #include <QApplication>
 #include <QDebug>
@@ -412,6 +413,12 @@ void Button::fancyPaint(QPainter &painter)
     {
         return;
     }
+    if (glass::surface(this, QRectF(this->rect()).adjusted(2, 2, -2, -2),
+                       "button",
+                       this->leftMouseButtonDown_ || this->menuVisible_
+                           ? 1.0
+                           : this->hoverMultiplier_))
+        return;
     const auto pressed = this->leftMouseButtonDown_ || this->menuVisible_;
     const auto amount = pressed ? 1.0 : this->hoverMultiplier_;
     if (amount <= 0)

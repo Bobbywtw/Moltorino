@@ -46,10 +46,15 @@ $settingsFile = Join-Path $identity.settingsDirectory 'settings.json'
 if (Test-Path $settingsFile) { throw "Refusing to replace an existing profile at $settingsFile" }
 New-Item -ItemType Directory -Path $identity.settingsDirectory -Force | Out-Null
 foreach ($testCase in @(
-    @{ name = 'Baseline'; theme = 'Dark'; enabled = $false },
-    @{ name = 'Glass-Dark'; theme = 'Dark'; enabled = $true },
-    @{ name = 'Glass-Theme'; theme = 'Glass'; enabled = $true }
+    @{ name = 'Baseline'; theme = 'Dark'; enabled = $false; disableGpu = $true },
+    @{ name = 'Glass-Dark'; theme = 'Dark'; enabled = $false },
+    @{ name = 'Glass-Theme'; theme = 'Glass'; enabled = $true },
+    @{ name = 'Glass-Wallpaper'; theme = 'Dark'; enabled = $false; wallpaper = ':/themes/wallpapers/midnight-garden.jpg' }
 )) {
+    if ($testCase.disableGpu) { $env:MOLTORINO_GLASS_DISABLE = '1' }
+    else { Remove-Item Env:MOLTORINO_GLASS_DISABLE -ErrorAction SilentlyContinue }
+    if ($testCase.wallpaper) { $env:MOLTORINO_UI_REVIEW_WALLPAPER = $testCase.wallpaper }
+    else { Remove-Item Env:MOLTORINO_UI_REVIEW_WALLPAPER -ErrorAction SilentlyContinue }
     $theme = $testCase.theme
     $profile = @{ appearance = @{ glassSkinEnabled = $testCase.enabled; theme = @{ name = $theme; moltorinoSelection = $theme; defaultApplied = $true; bluzyrinoMigrated = $true } } }
     $profile | ConvertTo-Json -Depth 8 | Set-Content $settingsFile -Encoding utf8
@@ -59,8 +64,16 @@ foreach ($testCase in @(
     $env:CHATTERINO_LOG_TO_FILE = Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'startup.log'
     Invoke-Package @('--verbose')
     if ((Get-FileHash $settingsFile).Hash -ne $before) { throw "UI review modified the existing $theme settings fixture" }
-    foreach ($capture in @('chat.png', 'chat-resized.png', 'menu.png', 'composer.json')) {
+    foreach ($capture in @('chat.png', 'chat-resized.png', 'menu.png', 'settings.png', 'emotes.png', 'dialog.png', 'composer.json', 'chrome.json')) {
         if (!(Test-Path (Join-Path $env:MOLTORINO_UI_REVIEW_DIR $capture))) { throw "Missing native Qt capture: $theme/$capture" }
+    }
+    if (!$testCase.disableGpu) {
+        $gpu = Get-Content (Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'chrome.json') -Raw | ConvertFrom-Json
+        if (!$gpu.available -or !$gpu.qmlReady -or $gpu.graphicsApi -ne 4) { throw 'Actual Moltorino is not using the D3D11 GPU material' }
+        foreach ($kind in @('tab','header','composer','button')) {
+            if (!($gpu.surfaces | Where-Object { $_.kind -eq $kind })) { throw "Missing real application material surface: $kind" }
+        }
+        Write-Output "Real application GPU material: $($gpu.surfaces.Count) surfaces; D3D11; old plugin setting=$($testCase.enabled)"
     }
     $composer = Get-Content (Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'composer.json') -Raw | ConvertFrom-Json
     Write-Output ($composer | ConvertTo-Json -Compress)
@@ -69,3 +82,6 @@ foreach ($testCase in @(
 }
 Remove-Item Env:MOLTORINO_UI_REVIEW_DIR
 Remove-Item Env:CHATTERINO_LOG_TO_FILE
+
+Remove-Item Env:MOLTORINO_GLASS_DISABLE -ErrorAction SilentlyContinue
+Remove-Item Env:MOLTORINO_UI_REVIEW_WALLPAPER -ErrorAction SilentlyContinue

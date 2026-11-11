@@ -18,6 +18,7 @@
 #include "singletons/WindowManager.hpp"
 #include "util/MultiChannel.hpp"
 #include "util/QMagicEnum.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 #include "widgets/helper/ChannelView.hpp"
 #include "widgets/helper/NotebookTab.hpp"
 #include "widgets/Notebook.hpp"
@@ -694,7 +695,8 @@ void SplitContainer::paintEvent(QPaintEvent * /*event*/)
 
     if (this->splits_.empty())
     {
-        painter.fillRect(this->rect(), this->theme->splits.background);
+        if (!glass::available(this))
+            painter.fillRect(this->rect(), this->theme->splits.background);
 
         painter.setPen(this->theme->splits.header.text);
 

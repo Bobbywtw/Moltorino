@@ -14,6 +14,7 @@
 #include "singletons/ThemeWallpaper.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/RapidjsonHelpers.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 
 #include <pajlada/settings/settingmanager.hpp>
 #include <QColor>
@@ -1012,7 +1013,7 @@ void Theme::parseFrom(const QJsonObject &root, bool isCustomTheme)
     this->palette = palette;
     QApplication::setPalette(palette);
     // Only standard Qt controls use QSS; chat chrome is painted by its widgets.
-    qApp->setStyleSheet(uR"(
+    auto controlStyles = uR"(
         QMenu { background: %1; color: %2; border: 1px solid %3;
                 padding: 4px; border-radius: 6px; }
         QMenu::item { padding: 6px 26px 6px 12px; border-radius: 4px; }
@@ -1030,7 +1031,19 @@ void Theme::parseFrom(const QJsonObject &root, bool isCustomTheme)
         QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
     )"_s.arg(ui.surface.name(QColor::HexArgb), ui.text.name(),
              ui.border.name(QColor::HexArgb), ui.raised.name(),
-             ui.muted.name()));
+             ui.muted.name());
+    if (glass::enabled())
+    {
+        controlStyles += QStringLiteral(
+            "QMenu, QToolTip { background: transparent; border: 0; }"
+            "QMenu::item:selected { background: transparent; }"
+            "QPushButton[liquidGlassSurface=true], "
+            "QToolButton[liquidGlassSurface=true],"
+            "QLineEdit[liquidGlassSurface=true], "
+            "QComboBox[liquidGlassSurface=true]"
+            " { background: transparent; border: 0; }");
+    }
+    qApp->setStyleSheet(controlStyles);
 }
 
 bool Theme::isAutoReloading() const

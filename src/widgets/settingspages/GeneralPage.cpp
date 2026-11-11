@@ -23,9 +23,6 @@
 #include "widgets/BaseWindow.hpp"
 #include "widgets/helper/FontSettingWidget.hpp"
 #include "widgets/settingspages/GeneralPageView.hpp"
-#ifdef MOLTORINO_WITH_QTQUICK_GLASS_PREVIEW
-#    include "widgets/glass/GlassQuickPreview.hpp"
-#endif
 #include "widgets/settingspages/SettingWidget.hpp"
 
 #include <QDesktopServices>
@@ -96,7 +93,7 @@ void addKeyboardModifierSetting(GeneralPageView &layout, const QString &title,
         },
         false);
 }
-}
+}  // namespace
 
 namespace chatterino {
 
@@ -132,21 +129,6 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     auto &s = *getSettings();
 
     layout.addTitle("Interface");
-
-#ifdef MOLTORINO_WITH_QTQUICK_GLASS_PREVIEW
-    layout.addButton("Open GPU Liquid Glass preview", [this] {
-        glass::openGlassQuickPreview(this);
-    });
-    layout.addDescription(
-        "Experimental GPU panel in a Qt Quick child window. "
-        "Only simulated messages are shown; normal chat stays intact.");
-#endif
-
-    SettingWidget::checkbox("Enable experimental Liquid Glass plugin",
-                            s.glassSkinEnabled)
-        ->setTooltip("Optional bundled Qt appearance module. Turn it off "
-                     "to immediately restore the standard UI.")
-        ->addTo(layout);
 
     {
         auto *themes = getApp()->getThemes();
@@ -247,7 +229,6 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                 }
                 else
                 {
-
                     return NotebookTabLocation::Top;
                 }
             },
@@ -1089,16 +1070,18 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         "reduce bandwidth usage and to speed up loading.");
 
     auto *cachePathLabel = layout.addDescription("placeholder :D");
-    getSettings()->cachePath.connect([cachePathLabel](const auto &,
-                                                      auto) mutable {
-        QString newPath = getApp()->getPaths().cacheDirectory();
+    getSettings()->cachePath.connect(
+        [cachePathLabel](const auto &, auto) mutable {
+            QString newPath = getApp()->getPaths().cacheDirectory();
 
-        QString pathShortened = "Cache saved at <a href=\"file:///" + newPath +
-                                R"("><span style="color: white;">)" +
-                                shortenString(newPath, 50) + "</span></a>";
-        cachePathLabel->setText(pathShortened);
-        cachePathLabel->setToolTip(newPath);
-    }, this->managedConnections_);
+            QString pathShortened = "Cache saved at <a href=\"file:///" +
+                                    newPath +
+                                    R"("><span style="color: white;">)" +
+                                    shortenString(newPath, 50) + "</span></a>";
+            cachePathLabel->setText(pathShortened);
+            cachePathLabel->setToolTip(newPath);
+        },
+        this->managedConnections_);
 
     {
         auto *box = new QHBoxLayout;
@@ -1306,9 +1289,8 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                      "while this is off.")
         ->addTo(layout);
     SettingWidget::checkbox("Bluzyrino", s.showBadgesBluzyrino)
-        ->setTooltip(
-            "Applies to everyone's badges on this device. Manage your "
-            "own badge visibility in Vanity.")
+        ->setTooltip("Applies to everyone's badges on this device. Manage your "
+                     "own badge visibility in Vanity.")
         ->addTo(layout);
     SettingWidget::checkbox("Wydios", s.showBadgesWydios)
         ->addKeywords({"wydios", "wy"})
@@ -1442,8 +1424,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         presetCombo->setCurrentIndex(-1);
 
         QPalette palette = presetCombo->palette();
-        palette.setColor(QPalette::PlaceholderText,
-                         QColor(255, 255, 255));
+        palette.setColor(QPalette::PlaceholderText, QColor(255, 255, 255));
         presetCombo->setPalette(palette);
         s.searchEnabled.connect(
             [presetCombo](bool value) {
@@ -1865,4 +1846,4 @@ void GeneralPage::onShow()
     getTheme()->reloadAvailableThemes();
 }
 
-}
+}  // namespace chatterino

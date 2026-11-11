@@ -21,6 +21,7 @@
 #include "util/UiReview.hpp"
 #include "util/UnixSignalHandler.hpp"
 #include "widgets/dialogs/LastRunCrashDialog.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 
 #include <QApplication>
 #include <QCryptographicHash>
@@ -442,6 +443,7 @@ void runGui(QApplication &a, const Modes &modes, const Paths &paths,
     });
 
     Application app(settings, paths, args, updates);
+    glass::installChrome();
     app.initialize(settings, modes, paths);
     scheduleUiReview();
 

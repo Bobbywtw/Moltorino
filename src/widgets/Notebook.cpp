@@ -24,6 +24,7 @@
 #include "widgets/dialogs/MoltorinoDialogTheme.hpp"
 #include "widgets/dialogs/SettingsDialog.hpp"
 #include "widgets/dialogs/TabGroupDialog.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 #include "widgets/helper/ChannelView.hpp"
 #include "widgets/helper/NotebookTab.hpp"
 #include "widgets/splits/Split.hpp"
@@ -3063,7 +3064,8 @@ void Notebook::paintEvent(QPaintEvent *event)
     auto scale = this->scale();
 
     QPainter painter(this);
-    painter.fillRect(this->rect(), this->theme->window.background);
+    if (!glass::available(this))
+        painter.fillRect(this->rect(), this->theme->window.background);
     if (this->tabLocation_ == NotebookTabLocation::Top ||
         this->tabLocation_ == NotebookTabLocation::Bottom)
     {

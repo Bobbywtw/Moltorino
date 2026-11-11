@@ -23,6 +23,8 @@ set(SOURCE_FILES
         widgets/glass/GlassSkinInterface.hpp
         widgets/glass/GlassSkinHost.hpp
         widgets/glass/GlassSkinHost.cpp
+        widgets/glass/GlassChrome.hpp
+        widgets/glass/GlassChrome.cpp
 
         common/AccountCredentials.cpp
         common/AccountCredentials.hpp
@@ -1219,12 +1221,6 @@ else()
     list(APPEND SOURCE_FILES common/SecureCredentialsUnavailable.cpp)
 endif()
 
-if(MOLTORINO_GLASS_QUICK_PREVIEW)
-    list(APPEND SOURCE_FILES
-        widgets/glass/GlassQuickPreview.hpp
-        widgets/glass/GlassQuickPreview.cpp)
-endif()
-
 # Generate source groups for use in IDEs
 source_group(TREE ${CMAKE_SOURCE_DIR} FILES ${SOURCE_FILES})
 
@@ -1239,13 +1235,15 @@ add_library(${LIBRARY_PROJECT} OBJECT ${SOURCE_FILES})
 if(MOLTORINO_GLASS_QUICK_PREVIEW)
     target_compile_definitions(${LIBRARY_PROJECT} PRIVATE
         MOLTORINO_WITH_QTQUICK_GLASS_PREVIEW)
-    target_link_libraries(${LIBRARY_PROJECT} PUBLIC Qt6::Quick Qt6::Qml)
+    # Only GlassChrome.cpp includes QuickWidgets. LINK_ONLY avoids changing the
+    # compile command/cache identity of every unrelated application source.
+    target_link_libraries(${LIBRARY_PROJECT} PUBLIC Qt6::Quick Qt6::Qml "$<LINK_ONLY:Qt6::QuickWidgets>")
     qt_add_resources(${LIBRARY_PROJECT} "moltorino-glass-quick-qml"
         PREFIX "/moltorino-glass"
         BASE "${CMAKE_SOURCE_DIR}/tools/glass-lab/qml"
         FILES
             "${CMAKE_SOURCE_DIR}/tools/glass-lab/qml/LiquidGlassPanel.qml"
-            "${CMAKE_SOURCE_DIR}/tools/glass-lab/qml/GlassIntegrationPreview.qml")
+            "${CMAKE_SOURCE_DIR}/tools/glass-lab/qml/GlassChrome.qml")
     qt_add_shaders(${LIBRARY_PROJECT} "moltorino-glass-quick-shaders"
         PREFIX "/shaders"
         BASE "${CMAKE_SOURCE_DIR}/tools/glass-lab/shaders"
@@ -1253,22 +1251,6 @@ if(MOLTORINO_GLASS_QUICK_PREVIEW)
         FILES
             "${CMAKE_SOURCE_DIR}/tools/glass-lab/shaders/glass.vert"
             "${CMAKE_SOURCE_DIR}/tools/glass-lab/shaders/glass.frag")
-endif()
-if(BUILD_APP)
-    add_library(moltorino-liquid-glass MODULE
-        widgets/glass/LiquidGlassSkin.cpp
-        widgets/glass/GlassSkinInterface.hpp)
-    target_include_directories(moltorino-liquid-glass PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(moltorino-liquid-glass PRIVATE
-        Qt${MAJOR_QT_VERSION}::Widgets)
-    set_target_properties(moltorino-liquid-glass PROPERTIES
-        AUTOMOC ON
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/glass"
-        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/glass"
-        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin/glass"
-        RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}/bin/glass"
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/glass")
 endif()
 add_library(moltorino-tiktok-login STATIC
     ../lib/quirc/quirc.c

@@ -39,11 +39,14 @@
 #include "widgets/dialogs/SelectChannelDialog.hpp"
 #include "widgets/dialogs/SelectChannelFiltersDialog.hpp"
 #include "widgets/dialogs/UserInfoPopup.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 #include "widgets/helper/AutoModReviewBar.hpp"
 #include "widgets/helper/ChannelView.hpp"
 #include "widgets/helper/DebugPopup.hpp"
 #include "widgets/helper/NotebookTab.hpp"
+#include "widgets/helper/PinnedMessageBanner.hpp"
 #include "widgets/helper/PollBanner.hpp"
+#include "widgets/helper/PredictionBanner.hpp"
 #include "widgets/helper/ResizingTextEdit.hpp"
 #include "widgets/helper/SearchPopup.hpp"
 #include "widgets/Notebook.hpp"
@@ -53,8 +56,6 @@
 #include "widgets/splits/SplitContainer.hpp"
 #include "widgets/splits/SplitHeader.hpp"
 #include "widgets/splits/SplitInput.hpp"
-#include "widgets/helper/PinnedMessageBanner.hpp"
-#include "widgets/helper/PredictionBanner.hpp"
 #include "widgets/splits/SplitOverlay.hpp"
 #include "widgets/Window.hpp"
 
@@ -70,8 +71,8 @@
 #include <QMovie>
 #include <QPainter>
 #include <QSet>
-#include <QVector>
 #include <QVBoxLayout>
+#include <QVector>
 
 #include <functional>
 #include <optional>
@@ -2869,7 +2870,8 @@ void Split::paintEvent(QPaintEvent *)
     // color the background of the chat
     QPainter painter(this);
 
-    painter.fillRect(this->rect(), this->theme->splits.background);
+    if (!glass::available(this))
+        painter.fillRect(this->rect(), this->theme->splits.background);
 }
 
 void Split::mouseMoveEvent(QMouseEvent *event)

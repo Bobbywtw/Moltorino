@@ -7,11 +7,16 @@
 #include "messages/Image.hpp"
 #include "messages/Message.hpp"
 #include "messages/MessageBuilder.hpp"
+#include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
+#include "widgets/dialogs/EmotePopup.hpp"
+#include "widgets/dialogs/SettingsDialog.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 #include "widgets/helper/NotebookTab.hpp"
 #include "widgets/Notebook.hpp"
 #include "widgets/splits/Split.hpp"
 #include "widgets/splits/SplitContainer.hpp"
+#include "widgets/splits/SplitHeader.hpp"
 #include "widgets/splits/SplitInput.hpp"
 #include "widgets/Window.hpp"
 
@@ -19,13 +24,184 @@
 #include <QApplication>
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMenu>
+#include <QMessageBox>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QTimer>
 
+#include <functional>
+
 namespace chatterino {
+namespace {
+class ApplicationReview final : public QObject
+{
+    Window *window_;
+    Split *split_;
+    QString output_;
+    QJsonObject measurements_;
+    bool valid_ = true;
+    QImage on_;
+    void later(int ms, std::function<void()> next)
+    {
+        QTimer::singleShot(ms, this, std::move(next));
+    }
+    void save(QWidget *widget, const QString &name)
+    {
+        valid_ &= widget && widget->grab().save(output_ + "/" + name + ".png");
+        if (widget && glass::enabled())
+        {
+            const auto info = glass::diagnostics(widget);
+            valid_ &= info["available"].toBool() && info["qmlReady"].toBool() &&
+                      info["graphicsApi"].toInt() >= 3;
+            write(name + "-gpu.json", info);
+        }
+    }
+    void write(const QString &name, const QJsonObject &object)
+    {
+        QFile file(output_ + "/" + name);
+        valid_ &= file.open(QIODevice::WriteOnly) &&
+                  file.write(QJsonDocument(object).toJson()) > 0;
+    }
+    void menu()
+    {
+        auto *header = split_->findChild<SplitHeader *>();
+        if (!header)
+        {
+            qApp->exit(1);
+            return;
+        }
+        const auto point = QPointF(30, header->height() / 2);
+        QMouseEvent press(QEvent::MouseButtonPress, point,
+                          header->mapToGlobal(point.toPoint()), Qt::RightButton,
+                          Qt::RightButton, Qt::NoModifier);
+        QApplication::sendEvent(header, &press);
+        later(350, [this] {
+            auto *popup =
+                qobject_cast<QMenu *>(QApplication::activePopupWidget());
+            if (!popup)
+            {
+                qApp->exit(1);
+                return;
+            }
+            save(popup, "menu");
+            popup->close();
+            SettingsDialog::showDialog();
+            later(800, [this] {
+                QWidget *settings = nullptr;
+                for (auto *w : QApplication::topLevelWidgets())
+                    if (dynamic_cast<SettingsDialog *>(w) && w->isVisible())
+                        settings = w;
+                if (!settings)
+                {
+                    qApp->exit(1);
+                    return;
+                }
+                save(settings, "settings");
+                settings->hide();
+                auto *emotes = new EmotePopup(window_);
+                emotes->loadChannel(std::make_shared<Channel>(
+                    "community", Channel::Type::None));
+                emotes->resize(660, 480);
+                emotes->show();
+                later(700, [this, emotes] {
+                    save(emotes, "emotes");
+                    emotes->hide();
+                    emotes->deleteLater();
+                    auto *dialog = new QMessageBox(
+                        QMessageBox::Information, "Moltorino",
+                        "Native dialog controls remain functional.",
+                        QMessageBox::Ok, window_);
+                    dialog->setAttribute(Qt::WA_DeleteOnClose);
+                    dialog->show();
+                    later(400, [this, dialog] {
+                        save(dialog, "dialog");
+                        dialog->close();
+                        const auto text = split_->getInput().getInputText() ==
+                                          "Thanks for the stream!";
+                        measurements_["textPreserved"] = text;
+                        valid_ &= text;
+                        write("composer.json", measurements_);
+                        qApp->exit(valid_ ? 0 : 1);
+                    });
+                });
+            });
+        });
+    }
+
+public:
+    ApplicationReview(Window *window, Split *split, QString output)
+        : QObject(qApp)
+        , window_(window)
+        , split_(split)
+        , output_(std::move(output))
+    {
+        QDir().mkpath(output_);
+        later(1300, [this] {
+            save(window_, "chat");
+            on_ = window_->grab().toImage();
+            const auto info = glass::diagnostics(window_);
+            write("chrome.json", info);
+            if (glass::enabled())
+            {
+                QStringList kinds;
+                for (const auto &item : info["surfaces"].toArray())
+                    kinds << item.toObject()["kind"].toString();
+                for (const auto &kind : {"tab", "header", "composer", "button"})
+                    valid_ &= kinds.contains(kind);
+            }
+            measurements_["singleLineHeight"] = split_->getInput().height();
+            split_->getInput().setInputText(
+                "First line\nSecond line\nThird line");
+            later(200, [this] {
+                measurements_["multilineHeight"] = split_->getInput().height();
+                split_->getInput().setInputText("Thanks for the stream!");
+                window_->resize(400, 680);
+                later(300, [this] {
+                    measurements_["narrowHeight"] = split_->getInput().height();
+                    save(window_, "chat-resized");
+                    window_->resize(1180, 760);
+                    later(300, [this] {
+                        measurements_["restoredHeight"] =
+                            split_->getInput().height();
+                        valid_ &= measurements_["multilineHeight"].toInt() >
+                                  measurements_["singleLineHeight"].toInt();
+                        valid_ &=
+                            qAbs(measurements_["restoredHeight"].toInt() -
+                                 measurements_["singleLineHeight"].toInt()) <=
+                            2;
+                        if (!glass::enabled())
+                        {
+                            menu();
+                            return;
+                        }
+                        on_ = window_->grab().toImage();
+                        glass::reviewOptics(window_, false);
+                        later(200, [this] {
+                            save(window_, "chat-optics-off");
+                            auto off = window_->grab().toImage();
+                            int changed = 0;
+                            for (int y = 0; y < off.height(); ++y)
+                                for (int x = 0; x < off.width(); ++x)
+                                    if (off.pixel(x, y) != on_.pixel(x, y))
+                                        ++changed;
+                            measurements_["opticsChangedPixels"] = changed;
+                            valid_ &= changed > 500;
+                            glass::reviewOptics(window_, true);
+                            later(200, [this] {
+                                menu();
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    }
+};
+}  // namespace
 void scheduleUiReview()
 {
     const auto output = qEnvironmentVariable("MOLTORINO_UI_REVIEW_DIR");
@@ -36,6 +212,15 @@ void scheduleUiReview()
     // Use the real layout/renderer and disconnected, unlogged channels. Never
     // synthesize provider traffic or send messages during the review.
     QTimer::singleShot(500, qApp, [output] {
+        if (!qEnvironmentVariableIsEmpty("MOLTORINO_UI_REVIEW_WALLPAPER"))
+        {
+            // Only the disconnected CI fixture uses this existing bundled image.
+            // The user's settings file is never changed.
+            getTheme()->customization.wallpaperSource =
+                qEnvironmentVariable("MOLTORINO_UI_REVIEW_WALLPAPER");
+            getTheme()->customization.wallpaperOverlayOpacity = 42;
+            getTheme()->updated.invoke();
+        }
         auto &window = getApp()->getWindows()->getMainWindow();
         window.resize(1180, 760);
         auto &notebook = window.getNotebook();
@@ -113,68 +298,7 @@ void scheduleUiReview()
         notebook.select(page);
         getApp()->getWindows()->forceLayoutChannelViews();
         window.show();
-        QTimer::singleShot(700, qApp, [output, &window, split] {
-            QDir().mkpath(output);
-            const auto saved = window.grab().save(output + "/chat.png");
-            const auto single = split->getInput().height();
-            split->getInput().setInputText(
-                "First line\nSecond line\nThird line");
-            QTimer::singleShot(
-                200, qApp, [output, &window, split, single, saved] {
-                    const auto multiline = split->getInput().height();
-                    split->getInput().setInputText("Thanks for the stream!");
-                    window.resize(720, 560);
-                    QTimer::singleShot(
-                        200, qApp,
-                        [output, &window, split, single, multiline, saved] {
-                            const auto narrow = split->getInput().height();
-                            const auto resized = window.grab().save(
-                                output + "/chat-resized.png");
-                            window.resize(1180, 760);
-                            QTimer::singleShot(
-                                200, qApp,
-                                [output, &window, split, single, multiline,
-                                 narrow, saved, resized] {
-                                    const auto restored =
-                                        split->getInput().height();
-                                    QMenu menu;
-                                    menu.addAction("Open channel");
-                                    menu.addAction("Copy channel address");
-                                    menu.addSeparator();
-                                    menu.addAction("Channel settings");
-                                    menu.addAction("Unavailable action")
-                                        ->setEnabled(false);
-                                    menu.ensurePolished();
-                                    menu.resize(menu.sizeHint());
-                                    const auto menuSaved =
-                                        menu.grab().save(output + "/menu.png");
-                                    const auto textPreserved =
-                                        split->getInput().getInputText() ==
-                                        "Thanks for the stream!";
-                                    QJsonObject measurements{
-                                        {"singleLineHeight", single},
-                                        {"multilineHeight", multiline},
-                                        {"narrowHeight", narrow},
-                                        {"restoredHeight", restored},
-                                        {"textPreserved", textPreserved}};
-                                    QFile file(output + "/composer.json");
-                                    const auto written =
-                                        file.open(QIODevice::WriteOnly) &&
-                                        file.write(QJsonDocument(measurements)
-                                                       .toJson()) > 0;
-                                    qApp->exit(
-                                        saved && resized && menuSaved &&
-                                                written && single > 0 &&
-                                                narrow > 0 &&
-                                                multiline > single &&
-                                                qAbs(restored - single) <= 2 &&
-                                                textPreserved
-                                            ? 0
-                                            : 1);
-                                });
-                        });
-                });
-        });
+        new ApplicationReview(&window, split, output);
     });
 }
 }  // namespace chatterino

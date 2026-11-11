@@ -20,8 +20,9 @@
 #include "widgets/dialogs/ColorPickerDialog.hpp"
 #include "widgets/dialogs/MoltorinoDialogTheme.hpp"
 #include "widgets/dialogs/SettingsDialog.hpp"
-#include "widgets/Notebook.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 #include "widgets/glass/GlassSkinHost.hpp"
+#include "widgets/Notebook.hpp"
 #include "widgets/splits/DraggedSplit.hpp"
 #include "widgets/splits/Split.hpp"
 #include "widgets/splits/SplitContainer.hpp"
@@ -1705,13 +1706,15 @@ void NotebookTab::paintEvent(QPaintEvent *)
             shapedRect.adjust(0, gap / 2, 0, -gap / 2);
         }
     }
+    if (glass::available(this))
+        shapedRect = QRectF(bgRect).adjusted(3 * scale, 3 * scale, -3 * scale,
+                                             -3 * scale);
     const auto backgroundPath =
         tabBackgroundPath(shapedRect, this->tabLocation_, tabRadius,
                           individual || this->isFirstVisible_,
                           individual || this->isLastVisible_);
     painter.setRenderHint(QPainter::Antialiasing, tabRadius > 0);
-    if (!(getSettings()->glassSkinEnabled &&
-          glass::paint(painter, shapedRect, glass::Surface::Tab,
+    if (!(glass::paint(painter, shapedRect, glass::Surface::Tab,
                        this->selected_ ? 1.0 : this->hoverProgress(), scale)))
     {
         painter.fillPath(backgroundPath, tabBackground);

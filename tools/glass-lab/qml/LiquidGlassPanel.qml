@@ -10,6 +10,7 @@ Item {
     property real dispersion: 0.65
     property real motionX: 0.0
     property real motionY: 0.0
+    property point sourceOrigin: Qt.point(NaN, NaN)
     property point cursorUV: Qt.point(-2, -2)
 
     // Refraction (up to 16.2px at max strength) + parallax sampling padding.
@@ -22,7 +23,9 @@ Item {
         visible: false
         sourceItem: panel.backgroundLayer
         sourceRect: {
-            const p = panel.mapToItem(panel.backgroundLayer, -panel.inset, -panel.inset)
+            const p = Number.isFinite(panel.sourceOrigin.x)
+                    ? Qt.point(panel.sourceOrigin.x - panel.inset, panel.sourceOrigin.y - panel.inset)
+                    : panel.mapToItem(panel.backgroundLayer, -panel.inset, -panel.inset)
             return Qt.rect(p.x, p.y, panel.textureWidth, panel.textureHeight)
         }
         // Let Qt allocate at native device pixel ratio. While an outer

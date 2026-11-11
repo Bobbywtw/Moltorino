@@ -10,6 +10,7 @@
 #include "singletons/Fonts.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
+#include "widgets/glass/GlassChrome.hpp"
 
 #include <QPainter>
 
@@ -322,6 +323,8 @@ void TooltipWidget::themeChangedEvent()
 
 void TooltipWidget::paintEvent(QPaintEvent *)
 {
+    if (glass::surface(this, this->rect(), "window"))
+        return;
     QPainter painter(this);
 
     const auto &ui = uiPalette(getTheme()->isLightTheme());
