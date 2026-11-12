@@ -15,14 +15,14 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "ProductName",      "Moltorino"
+            VALUE "ProductName",      "Glassorino"
             VALUE "ProductVersion",   "@PROJECT_VERSION@"
-            VALUE "CompanyName",      "MoltoBenne, https://github.com/MoltoBenne/Moltorino"
-            VALUE "FileDescription",  "Moltorino"
+            VALUE "CompanyName",      "Glassorino contributors"
+            VALUE "FileDescription",  "Glassorino"
             VALUE "FileVersion",      "@PROJECT_VERSION@"
             VALUE "SpecialBuild",     "@GIT_COMMIT@"
-            VALUE "InternalName",     "Moltorino7"
-            VALUE "OriginalFilename", "Moltorino7.exe"
+            VALUE "InternalName",     "Glassorino"
+            VALUE "OriginalFilename", "Glassorino.exe"
             VALUE "LegalCopyright",   "Project contributors 2016-@CURRENT_YEAR@"
             VALUE "Licence",          "MIT"
         END

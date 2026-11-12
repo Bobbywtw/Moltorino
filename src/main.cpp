@@ -134,6 +134,7 @@ int main(int argc, char **argv)
 
     QCoreApplication::setApplicationName("chatterino");
     QCoreApplication::setApplicationVersion(Version::instance().version());
+    QGuiApplication::setApplicationDisplayName("Glassorino");
     QCoreApplication::setOrganizationDomain("chatterino.com");
 #if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
 
