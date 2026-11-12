@@ -78,6 +78,12 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Prepare Glassorino icon
+        shell: pwsh
+        run: |
+          python .CI/prepare-glassorino-icon.py
+          if ($LASTEXITCODE -ne 0) { throw 'Glassorino icon preparation failed' }
+
       - name: Install and identify Conan toolchain
         id: toolchain
         shell: pwsh
@@ -256,6 +262,9 @@ jobs:
         run: |
           $packageTimer = [Diagnostics.Stopwatch]::StartNew()
           New-Item -ItemType Directory Glassorino -Force | Out-Null
+          New-Item -ItemType Directory Glassorino/icons -Force | Out-Null
+          Copy-Item ../resources/icon.png Glassorino/icons/Glassorino.png
+          Copy-Item ../resources/icon.ico Glassorino/icons/Glassorino.ico
           Copy-Item bin/* Glassorino/ -Recurse -Exclude *.pdb
           windeployqt Glassorino/Glassorino.exe --release --no-compiler-runtime --no-translations --no-opengl-sw --qmldir ../tools/glass-lab/qml --dir Glassorino/ --force-openssl
           if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
