@@ -55,6 +55,27 @@
 #include <functional>
 
 namespace chatterino {
+namespace {
+class ReviewBackdrop final : public QWidget
+{
+public:
+    bool alternate = false;
+    ReviewBackdrop()
+        : QWidget(nullptr, Qt::Window | Qt::FramelessWindowHint |
+                               Qt::WindowStaysOnTopHint)
+    {
+        setObjectName("moltorinoReviewBackdrop");
+    }
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter painter(this);
+        painter.fillRect(rect(),
+                         alternate ? QColor("#bd7142") : QColor("#417cad"));
+        painter.fillRect(QRect(0, 0, width() / 2, height()),
+                         alternate ? QColor("#c4ad82") : QColor("#9fc0cf"));
+    }
+};
+}  // namespace
 class ApplicationReview final : public QObject
 {
     Window *window_;
@@ -64,6 +85,84 @@ class ApplicationReview final : public QObject
     bool valid_ = true;
     QImage on_;
     std::shared_ptr<TwitchChannel> toolsChannel_;
+    bool expectsGpu() const
+    {
+        return glass::enabled() && !qEnvironmentVariableIsSet(
+                                       "MOLTORINO_UI_REVIEW_EXPECT_FALLBACK");
+    }
+    QImage desktopPixels(QWidget *widget)
+    {
+        auto *screen = widget->screen();
+        const auto origin =
+            widget->mapToGlobal(QPoint()) - screen->geometry().topLeft();
+        return screen
+            ->grabWindow(0, origin.x(), origin.y(), widget->width(),
+                         widget->height())
+            .toImage();
+    }
+    void desktopReview()
+    {
+        if (!qEnvironmentVariableIsSet("MOLTORINO_UI_REVIEW_REQUIRE_DESKTOP"))
+        {
+            finish();
+            return;
+        }
+        auto *pattern = new ReviewBackdrop;
+        const auto bounds = window_->screen()->availableGeometry();
+        pattern->setGeometry(bounds.adjusted(50, 50, -50, -50));
+        pattern->show();
+        auto *card = new UserInfoPopup(false, split_);
+        card->setWindowFlag(Qt::WindowStaysOnTopHint);
+        card->ui_.nameLabel->setText("Desktop backdrop verification");
+        card->show();
+        card->move(pattern->geometry().center() - card->rect().center());
+        card->raise();
+        card->activateWindow();
+        later(1100, [this, pattern, card] {
+            const auto before = desktopPixels(card);
+            valid_ &= before.save(output_ + "/desktop-blue.png");
+            const auto info = glass::diagnostics(card);
+            valid_ &= info["desktopBackdrop"].toBool();
+            write("desktop-gpu.json", info);
+            const int frames = info["renderedFrames"].toInt();
+            pattern->alternate = true;
+            pattern->update();
+            later(1100, [this, pattern, card, before, frames] {
+                const auto after = desktopPixels(card);
+                valid_ &= after.save(output_ + "/desktop-amber.png");
+                double delta = 0;
+                int samples = 0;
+                if (before.size() == after.size())
+                    for (int y = after.height() / 2; y < after.height() * 4 / 5;
+                         y += 3)
+                        for (int x = after.width() / 4;
+                             x < after.width() * 3 / 4; x += 3)
+                        {
+                            const auto a = before.pixel(x, y);
+                            const auto b = after.pixel(x, y);
+                            delta += qAbs(qRed(a) - qRed(b)) +
+                                     qAbs(qGreen(a) - qGreen(b)) +
+                                     qAbs(qBlue(a) - qBlue(b));
+                            samples += 3;
+                        }
+                const double average = samples ? delta / samples : 0;
+                const int idleFrames =
+                    glass::diagnostics(card)["renderedFrames"].toInt() - frames;
+                measurements_["desktopLivePixelDelta"] = average;
+                measurements_["desktopIdleGpuFrames"] = idleFrames;
+                valid_ &= average > 4 && idleFrames <= 6;
+                card->move(card->pos() + QPoint(100, 30));
+                later(300, [this, pattern, card] {
+                    valid_ &= desktopPixels(card).save(output_ +
+                                                       "/desktop-moved.png");
+                    card->close();
+                    pattern->close();
+                    pattern->deleteLater();
+                    finish();
+                });
+            });
+        });
+    }
     void finish()
     {
         write("composer.json", measurements_);
@@ -168,7 +267,7 @@ class ApplicationReview final : public QObject
                 break;
             }
             default:
-                finish();
+                desktopReview();
                 return;
         }
         tool->show();
@@ -247,8 +346,10 @@ class ApplicationReview final : public QObject
         if (widget && glass::enabled())
         {
             const auto info = glass::diagnostics(widget);
-            valid_ &= info["available"].toBool() && info["qmlReady"].toBool() &&
-                      info["graphicsApi"].toInt() >= 3;
+            valid_ &= expectsGpu() ? (info["available"].toBool() &&
+                                      info["qmlReady"].toBool() &&
+                                      info["graphicsApi"].toInt() >= 3)
+                                   : !info["available"].toBool();
             write(name + "-gpu.json", info);
         }
     }
@@ -267,7 +368,7 @@ class ApplicationReview final : public QObject
         card->move(window_->mapToGlobal(QPoint(80, 80)));
         later(500, [this, card] {
             save(card, "usercard");
-            if (glass::enabled())
+            if (expectsGpu())
             {
                 const auto info = glass::diagnostics(card);
                 valid_ &=
@@ -307,7 +408,7 @@ class ApplicationReview final : public QObject
                 card->move(window_->mapToGlobal(
                     QPoint(window_->width() + 80, window_->height() + 80)));
                 later(300, [this, card] {
-                    if (glass::enabled())
+                    if (expectsGpu())
                         valid_ &= !glass::diagnostics(card)["ownerCaptureValid"]
                                        .toBool();
                     card->move(window_->mapToGlobal(QPoint(80, 80)));
@@ -360,7 +461,7 @@ class ApplicationReview final : public QObject
                     return;
                 }
                 save(settings, "settings");
-                if (glass::enabled())
+                if (expectsGpu())
                     for (auto *w : settings->findChildren<QWidget *>())
                         valid_ &= !w->property("liquidGlassSurface").toBool();
                 settings->hide();
@@ -452,7 +553,7 @@ public:
             on_ = window_->grab().toImage();
             const auto info = glass::diagnostics(window_);
             write("chrome.json", info);
-            if (glass::enabled())
+            if (expectsGpu())
             {
                 QStringList kinds;
                 for (const auto &item : info["surfaces"].toArray())
@@ -483,7 +584,7 @@ public:
                                 qAbs(measurements_["restoredHeight"].toInt() -
                                      measurements_["singleLineHeight"]
                                          .toInt()) <= 2;
-                            if (!glass::enabled())
+                            if (!expectsGpu())
                             {
                                 menu();
                                 return;

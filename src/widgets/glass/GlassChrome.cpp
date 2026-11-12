@@ -241,6 +241,8 @@ QString panelStyles(QString sheet)
         QStringLiteral(
             "Swatch|ColorPreview|ColorPicker|Badge|Progress|Indicator"),
         QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression shell(QStringLiteral(
+        "#\\w*(?:Root|Content|Header|Footer|ScrollArea)(?:\\s|,|$)"));
     auto matches = fills.globalMatch(sheet);
     struct Replacement {
         qsizetype start;
@@ -253,14 +255,16 @@ QString panelStyles(QString sheet)
         const auto match = matches.next();
         const auto open = sheet.lastIndexOf('{', match.capturedStart());
         const auto previous = sheet.lastIndexOf('}', open);
-        if (semantic.match(sheet.mid(previous + 1, open - previous - 1))
-                .hasMatch())
+        const auto selector = sheet.mid(previous + 1, open - previous - 1);
+        if (semantic.match(selector).hasMatch())
             continue;
         QColor color(match.captured(1));
         if (!color.isValid() || color.alpha() < 240 ||
             color.lightnessF() > 0.3 || color.hsvSaturationF() > 0.25)
             continue;
-        color.setAlpha(85);
+        // The GPU already owns the shell. Repeated translucent fills on a
+        // scroll area's nested containers otherwise add up to opaque black.
+        color.setAlpha(shell.match(selector).hasMatch() ? 0 : 85);
         replacements.append({match.capturedStart(1), match.capturedLength(1),
                              QString("rgba(%1,%2,%3,%4)")
                                  .arg(color.red())
@@ -332,6 +336,7 @@ public:
     bool popupDirty = true;
     bool ownedPopup = false;
     bool desktopBackdrop = false;
+    bool desktopDark = true;
     WId backdropWindowId = 0;
     QHash<QWidget *, QPair<QString, QString>> styled;
     QList<QPointer<QWidget>> clearedBackgrounds;
@@ -441,18 +446,21 @@ public:
     {
 #    ifdef USEWINSDK
         auto *window = parentWidget();
+        const bool darkTheme = !getTheme()->isLightTheme();
         if (!window->property("moltorinoDesktopBackdrop").toBool() ||
             !window->internalWinId() ||
-            backdropWindowId == window->internalWinId())
+            (backdropWindowId == window->internalWinId() &&
+             desktopDark == darkTheme))
             return;
         backdropWindowId = window->internalWinId();
+        desktopDark = darkTheme;
         const auto hwnd = reinterpret_cast<HWND>(backdropWindowId);
         // Values are documented in the Windows 11 SDK. Runtime HRESULT checks
         // also allow builds using older Windows SDK headers.
         constexpr auto systemBackdrop = static_cast<DWMWINDOWATTRIBUTE>(38);
         const int acrylic =
             3;  // DWMSBT_TRANSIENTWINDOW, actual desktop acrylic
-        const BOOL dark = TRUE;
+        const BOOL dark = darkTheme ? TRUE : FALSE;
         DwmSetWindowAttribute(hwnd, static_cast<DWMWINDOWATTRIBUTE>(20), &dark,
                               sizeof(dark));
         const MARGINS margins{-1, -1, -1, -1};
@@ -810,6 +818,11 @@ public:
                 // Native tabs retain their selected/hover states and keys.
                 panels.put(tabs, tabs->rect(), "toolbar", 0.);
             }
+            else if (w->objectName().endsWith("Header") ||
+                     w->objectName().endsWith("Footer"))
+            {
+                panels.put(w, w->rect(), "toolbar", 0.);
+            }
             if (auto *scroll = qobject_cast<QScrollArea *>(w))
             {
                 scroll->viewport()->setAutoFillBackground(false);
@@ -883,7 +896,8 @@ class ChromeEvents final : public QObject
             return false;
         auto *w = qobject_cast<QWidget *>(object);
         if (!w || constructing || w->inherits("QQuickWidget") ||
-            w->objectName() == "moltorinoGpuChrome")
+            w->objectName() == "moltorinoGpuChrome" ||
+            w->objectName() == "moltorinoReviewBackdrop")
             return false;
         if (event->type() == QEvent::Polish && w->isWindow())
             prepareDesktopBackdrop(w);

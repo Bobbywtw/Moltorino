@@ -47,10 +47,18 @@ if (Test-Path $settingsFile) { throw "Refusing to replace an existing profile at
 New-Item -ItemType Directory -Path $identity.settingsDirectory -Force | Out-Null
 foreach ($testCase in @(
     @{ name = 'Baseline'; theme = 'Dark'; enabled = $false; disableGpu = $true },
+    @{ name = 'Software-Fallback'; theme = 'Dark'; enabled = $false; software = $true },
     @{ name = 'Glass-Dark'; theme = 'Dark'; enabled = $false },
     @{ name = 'Glass-Theme'; theme = 'Glass'; enabled = $true },
     @{ name = 'Glass-Wallpaper'; theme = 'Dark'; enabled = $false; wallpaper = ':/themes/wallpapers/midnight-garden.jpg' }
 )) {
+    if ($testCase.software) {
+        $env:QT_QUICK_BACKEND = 'software'
+        $env:MOLTORINO_UI_REVIEW_EXPECT_FALLBACK = '1'
+    } else {
+        Remove-Item Env:QT_QUICK_BACKEND -ErrorAction SilentlyContinue
+        Remove-Item Env:MOLTORINO_UI_REVIEW_EXPECT_FALLBACK -ErrorAction SilentlyContinue
+    }
     if ($testCase.disableGpu) { $env:MOLTORINO_GLASS_DISABLE = '1' }
     else { Remove-Item Env:MOLTORINO_GLASS_DISABLE -ErrorAction SilentlyContinue }
     if ($testCase.wallpaper) { $env:MOLTORINO_UI_REVIEW_WALLPAPER = $testCase.wallpaper }
@@ -70,13 +78,17 @@ foreach ($testCase in @(
     foreach ($capture in @('usercard-populated.png', 'stream-info.png', 'chatters.png', 'chatters-search.png', 'vanity.png', 'vanity-tab-0.png', 'poll-create.png', 'poll-create-edited.png', 'poll-active.png', 'prediction-create.png', 'prediction-create-edited.png', 'prediction-manage.png')) {
         if (!(Test-Path (Join-Path $env:MOLTORINO_UI_REVIEW_DIR $capture))) { throw "Missing tool review: $theme/$capture" }
     }
-    if (!$testCase.disableGpu) {
+    if (!$testCase.disableGpu -and !$testCase.software) {
         $gpu = Get-Content (Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'chrome.json') -Raw | ConvertFrom-Json
         if (!$gpu.available -or !$gpu.qmlReady -or $gpu.graphicsApi -ne 4) { throw 'Actual Moltorino is not using the D3D11 GPU material' }
         foreach ($kind in @('tab','header','composer','button')) {
             if (!($gpu.surfaces | Where-Object { $_.kind -eq $kind })) { throw "Missing real application material surface: $kind" }
         }
         Write-Output "Real application GPU material: $($gpu.surfaces.Count) surfaces; D3D11; old plugin setting=$($testCase.enabled)"
+    }
+    if ($testCase.software) {
+        $gpu = Get-Content (Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'chrome.json') -Raw | ConvertFrom-Json
+        if ($gpu.available) { throw 'Software renderer did not restore native fallback controls' }
     }
     $composer = Get-Content (Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'composer.json') -Raw | ConvertFrom-Json
     Write-Output ($composer | ConvertTo-Json -Compress)
