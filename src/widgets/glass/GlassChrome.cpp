@@ -966,7 +966,12 @@ class ChromeEvents final : public QObject
 bool enabled()
 {
 #    ifdef MOLTORINO_WITH_QTQUICK_GLASS_PREVIEW
-    return !qEnvironmentVariableIsSet("MOLTORINO_GLASS_DISABLE");
+    // The software scene graph cannot execute the compiled optical shaders.
+    // Do not install a transparent Quick underlay in that mode: keep the
+    // existing native Qt Widgets backgrounds, controls and input instead.
+    return !qEnvironmentVariableIsSet("MOLTORINO_GLASS_DISABLE") &&
+           qEnvironmentVariable("QT_QUICK_BACKEND").trimmed().compare(
+               QStringLiteral("software"), Qt::CaseInsensitive) != 0;
 #    else
     return false;
 #    endif
