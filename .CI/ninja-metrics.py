@@ -9,7 +9,7 @@ for line in (build / ".ninja_log").read_text(encoding="utf-8").splitlines():
     if len(fields) >= 5 and not line.startswith("#"):
         records.append((int(fields[0]), int(fields[1]), fields[3].replace("\\", "/")))
 objects = [r for r in records if r[2].lower().endswith((".obj", ".o"))]
-executable = [r for r in records if r[2].lower().endswith("bin/moltorino7.exe")]
+executable = [r for r in records if r[2].lower().endswith("bin/glassorino.exe")]
 if not objects or not executable:
     raise SystemExit("Ninja log did not contain actual native object compilation and application linking")
 measurements = {
