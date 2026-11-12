@@ -1490,7 +1490,7 @@ if (BUILD_APP)
     target_link_libraries(${EXECUTABLE_PROJECT} PUBLIC ${LIBRARY_PROJECT})
 
     set_target_directory_hierarchy(${EXECUTABLE_PROJECT})
-    set_target_properties(${EXECUTABLE_PROJECT} PROPERTIES OUTPUT_NAME "Moltorino7")
+    set_target_properties(${EXECUTABLE_PROJECT} PROPERTIES OUTPUT_NAME "Glassorino")
 
     set(MOLTORINO_MEDIA_TOOLS_DIR "${CMAKE_BINARY_DIR}/bin/support/media" CACHE PATH
         "Directory containing the bundled ffmpeg, ffprobe and licenses")
@@ -1696,7 +1696,7 @@ if(WIN32)
     if(MOLTORINO_WINDOWS_APP_ID)
         set(_moltorino_windows_app_id "${MOLTORINO_WINDOWS_APP_ID}")
     elseif(NOT TARGET Velopack::Velopack)
-        set(_moltorino_windows_app_id "Moltorino.SourceBuild")
+        set(_moltorino_windows_app_id "Glassorino.SourceBuild")
     elseif(MOLTORINO_UPDATE_CHANNEL STREQUAL "internal")
         set(_moltorino_windows_app_id "MoltoBenne.Moltorino7UpdaterTest")
     else()
@@ -1805,8 +1805,8 @@ if (APPLE AND BUILD_APP)
     set_target_properties(${EXECUTABLE_PROJECT} PROPERTIES MACOSX_BUNDLE TRUE)
     set_target_properties(${EXECUTABLE_PROJECT}
         PROPERTIES
-        MACOSX_BUNDLE_BUNDLE_NAME "Moltorino"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "app.moltobenne.moltorino7"
+        MACOSX_BUNDLE_BUNDLE_NAME "Glassorino"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "app.glassorino.glassorino"
         MACOSX_BUNDLE_LONG_VERSION_STRING "${PROJECT_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"

@@ -14,7 +14,7 @@
 #include "providers/ffz/FfzBadges.hpp"
 #include "providers/ffzap/FfzApBadges.hpp"
 #include "providers/homies/HomiesBadges.hpp"
-#include "providers/moltorino/MoltorinoAuth.hpp"
+#include "providers/moltorino/GlassorinoAuth.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/seventv/SeventvPaints.hpp"
 #include "providers/twitch/api/Helix.hpp"
@@ -2065,13 +2065,13 @@ void VanityDialog::buildUi()
     this->tabs_->addTab(this->channelBadgePage_, QStringLiteral("Channel"));
     this->tabs_->addTab(this->sevenTVBadgePage_, QStringLiteral("7TV"));
     this->tabs_->addTab(this->paintPage_, QStringLiteral("Paints"));
-    this->tabs_->addTab(this->moltorinoBadgePage_, QStringLiteral("Moltorino"));
+    this->tabs_->addTab(this->moltorinoBadgePage_, QStringLiteral("Glassorino"));
     this->tabs_->addTab(this->layoutPage_, QStringLiteral("Order"));
     this->tabs_->setTabToolTip(1, QStringLiteral("Twitch global badge"));
     this->tabs_->setTabToolTip(2, QStringLiteral("Badge for this channel"));
     this->tabs_->setTabToolTip(3, QStringLiteral("7TV badge"));
     this->tabs_->setTabToolTip(4, QStringLiteral("7TV paint"));
-    this->tabs_->setTabToolTip(5, QStringLiteral("Moltorino badge"));
+    this->tabs_->setTabToolTip(5, QStringLiteral("Glassorino badge"));
     this->tabs_->setTabToolTip(6, QStringLiteral("Badge order and visibility"));
     this->mainLayout_->addWidget(this->tabs_, 1);
     QObject::connect(this->tabs_, &QTabWidget::currentChanged, this,
@@ -2445,7 +2445,7 @@ QWidget *VanityDialog::buildMoltorinoBadgeTab()
     layout->setContentsMargins(7, 7, 7, 7);
     layout->setSpacing(6);
 
-    auto *title = new QLabel(QStringLiteral("Moltorino badge"), page);
+    auto *title = new QLabel(QStringLiteral("Glassorino badge"), page);
     title->setObjectName(QStringLiteral("VanitySectionTitle"));
     layout->addWidget(title);
     this->moltorinoBadgeHint_ = new QLabel(page);
@@ -2474,7 +2474,7 @@ QWidget *VanityDialog::buildMoltorinoBadgeTab()
             this->refreshPreview();
         };
     addGallerySearch(layout, this->moltorinoBadgeGrid_,
-                     QStringLiteral("Search Moltorino badges"), page);
+                     QStringLiteral("Search Glassorino badges"), page);
     layout->addWidget(this->moltorinoBadgeGrid_, 1);
     return page;
 }
@@ -3707,7 +3707,7 @@ void VanityDialog::loadSevenTVState(bool connecting, bool forceRefresh)
     this->refreshConnectionText();
     this->populateCurrentTab();
     static constexpr auto QUERY = R"(
-query MoltorinoVanityInventory {
+query GlassorinoVanityInventory {
   users {
     me {
       id
@@ -4500,7 +4500,7 @@ void VanityDialog::populateMoltorinoBadgeChoices()
     QVector<VanityChoice> choices;
     choices.reserve(int(catalog.size()) + 1);
     choices.push_back({{}, QStringLiteral("No badge"), {}, {},
-                       QStringLiteral("Do not show a Moltorino badge."), true});
+                       QStringLiteral("Do not show a Glassorino badge."), true});
     auto orderedCatalog = catalog;
     std::stable_partition(
         orderedCatalog.begin(), orderedCatalog.end(),
@@ -4534,7 +4534,7 @@ void VanityDialog::populateMoltorinoBadgeChoices()
     if (catalog.empty())
     {
         this->moltorinoBadgeHint_->setText(
-            QStringLiteral("Loading the Moltorino badge collection..."));
+            QStringLiteral("Loading the Glassorino badge collection..."));
         this->moltorinoBadgeHint_->show();
     }
     else if (assigned.empty())
@@ -4918,7 +4918,7 @@ void VanityDialog::refreshPreview()
             &MoltorinoSupporterBadge::categoryId);
         if (selected != moltorinoBadges.end())
         {
-            addBadge(QStringLiteral("m"), QStringLiteral("Moltorino"),
+            addBadge(QStringLiteral("m"), QStringLiteral("Glassorino"),
                      selected->emote);
         }
     }
@@ -5865,7 +5865,7 @@ QString VanityDialog::layoutDisplayName(const QString &key) const
     }
     if (key == QStringLiteral("m"))
     {
-        return QStringLiteral("Moltorino");
+        return QStringLiteral("Glassorino");
     }
     if (key == QStringLiteral("bl"))
     {

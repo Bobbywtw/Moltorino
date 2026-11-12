@@ -104,7 +104,7 @@ endif()
 
 project(chatterino
     VERSION 15.5.2
-    DESCRIPTION "Moltorino chat client"
+    DESCRIPTION "Glassorino Liquid Glass chat client"
     HOMEPAGE_URL "https://moltorino.com/"
 )
 

@@ -1659,11 +1659,11 @@ void SplitInput::handleImagePaste(const QMimeData *source)
     if (getSettings()->askOnImageUpload.getValue())
     {
         QMessageBox msgBox(this->window());
-        msgBox.setWindowTitle("Moltorino");
+        msgBox.setWindowTitle("Glassorino");
         msgBox.setText("Image upload");
         msgBox.setInformativeText(
             "You are uploading an image to a 3rd party service not in "
-            "control of the Moltorino team. You may not be able to "
+            "control of the Glassorino team. You may not be able to "
             "remove the image from the site. Are you okay with this?");
         auto *cancel = msgBox.addButton(QMessageBox::Cancel);
         auto *yes = msgBox.addButton(QMessageBox::Yes);
@@ -1723,11 +1723,11 @@ void SplitInput::handleUrlPaste(const QString &url, QTextCursor cursor)
     if (getSettings()->askOnUrlShorten.getValue())
     {
         QMessageBox msgBox(this->window());
-        msgBox.setWindowTitle("Moltorino");
+        msgBox.setWindowTitle("Glassorino");
         msgBox.setText("URL Shortener");
         msgBox.setInformativeText(
             QString("You are about to shorten this URL using a 3rd party service "
-                    "not in control of the Moltorino team.\n"
+                    "not in control of the Glassorino team.\n"
                     "URL: %1\n"
                     "The service may collect and store the URLs you submit. "
                     "Are you okay with this?")

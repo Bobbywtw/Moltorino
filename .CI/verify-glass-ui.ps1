@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory = $true)][string] $ReviewDirectory
 )
 $ErrorActionPreference = 'Stop'
-$exe = Join-Path $PackageDirectory 'Moltorino7.exe'
+$exe = Join-Path $PackageDirectory 'Glassorino.exe'
 foreach ($marker in @('modes', 'portable')) {
     if (Test-Path (Join-Path $PackageDirectory $marker)) {
         throw "Package must use the existing normal profile, but contains $marker"
@@ -13,7 +13,7 @@ function Invoke-Package([string[]] $Arguments) {
     $process = Start-Process -FilePath $exe -ArgumentList $Arguments -PassThru -NoNewWindow
     if (!$process.WaitForExit(60000)) {
         $process.Kill()
-        throw "Moltorino launch timed out: $Arguments"
+        throw "Glassorino launch timed out: $Arguments"
     }
     if ($process.ExitCode -ne 0) {
         if ($env:CHATTERINO_LOG_TO_FILE -and (Test-Path $env:CHATTERINO_LOG_TO_FILE)) {
@@ -26,14 +26,14 @@ function Invoke-Package([string[]] $Arguments) {
                 Get-Content $env:CHATTERINO_LOG_TO_FILE -Tail 100
             }
         }
-        throw "Moltorino failed: $Arguments ($($process.ExitCode))"
+        throw "Glassorino failed: $Arguments ($($process.ExitCode))"
     }
 }
 Invoke-Package @('--moltorino-release-identity')
 $identityPath = Join-Path $PackageDirectory '.moltorino-release-identity-probe.json'
 $identity = Get-Content $identityPath -Raw | ConvertFrom-Json
 Write-Output ($identity | ConvertTo-Json -Compress)
-if ($identity.fullVersion -cne 'Moltorino M15.5.2') { throw "Incorrect displayed version: $($identity.fullVersion)" }
+if ($identity.fullVersion -cne 'Glassorino M15.5.2') { throw "Incorrect displayed version: $($identity.fullVersion)" }
 if ($identity.nightly -or $identity.portable) { throw 'Expected stable build using normal settings' }
 $expectedSettings = Join-Path $env:APPDATA 'Chatterino2/Settings'
 if ([IO.Path]::GetFullPath($identity.settingsDirectory) -ine [IO.Path]::GetFullPath($expectedSettings)) {
@@ -69,7 +69,7 @@ foreach ($testCase in @(
     }
     if (!$testCase.disableGpu) {
         $gpu = Get-Content (Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'chrome.json') -Raw | ConvertFrom-Json
-        if (!$gpu.available -or !$gpu.qmlReady -or $gpu.graphicsApi -ne 4) { throw 'Actual Moltorino is not using the D3D11 GPU material' }
+        if (!$gpu.available -or !$gpu.qmlReady -or $gpu.graphicsApi -ne 4) { throw 'Actual Glassorino is not using the D3D11 GPU material' }
         foreach ($kind in @('tab','header','composer','button')) {
             if (!($gpu.surfaces | Where-Object { $_.kind -eq $kind })) { throw "Missing real application material surface: $kind" }
         }

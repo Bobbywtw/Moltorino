@@ -4,7 +4,7 @@
 
 #include "widgets/dialogs/UpdateDialog.hpp"
 
-#include "providers/moltorino/MoltorinoUpdater.hpp"
+#include "providers/moltorino/GlassorinoUpdater.hpp"
 #include "widgets/Label.hpp"
 
 #include <QDesktopServices>
@@ -68,7 +68,7 @@ UpdateDialog::UpdateDialog()
                   BaseWindow::DisableLayoutSave})
 {
     this->setAttribute(Qt::WA_DeleteOnClose);
-    this->setWindowTitle("Moltorino Update");
+    this->setWindowTitle("Glassorino Update");
 
     auto *layout = new QVBoxLayout();
     layout->setContentsMargins(18, 16, 18, 14);
@@ -76,7 +76,7 @@ UpdateDialog::UpdateDialog()
     this->getLayoutContainer()->setLayout(layout);
 
     this->ui_.heading =
-        new Label(this, "Moltorino Update", FontStyle::UiMediumBold);
+        new Label(this, "Glassorino Update", FontStyle::UiMediumBold);
     this->ui_.heading->setWordWrap(true);
     layout->addWidget(this->ui_.heading);
 
@@ -142,14 +142,14 @@ void UpdateDialog::refresh()
             heading = "Updates unavailable";
             break;
         case MoltorinoUpdateStatus::Idle:
-            heading = "Moltorino updates";
+            heading = "Glassorino updates";
             break;
         case MoltorinoUpdateStatus::Checking:
             heading = "Checking for updates";
             break;
         case MoltorinoUpdateStatus::Downloading:
             heading = updater->isRollback() ? "Downloading the rollback"
-                                            : "Downloading Moltorino update";
+                                            : "Downloading Glassorino update";
             break;
         case MoltorinoUpdateStatus::Ready:
             heading = updater->isRollback() ? "Rollback ready"

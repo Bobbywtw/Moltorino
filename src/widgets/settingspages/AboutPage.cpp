@@ -30,7 +30,7 @@
 
 namespace chatterino {
 
-constexpr int PIXMAP_WIDTH = 500;
+constexpr int PIXMAP_WIDTH = 148;
 
 constexpr QStringView LINK_CHATTERINO_FEATURES =
     u"https://chatterino.com/#features";
@@ -46,9 +46,10 @@ AboutPage::AboutPage()
     auto layout = widget.setLayoutType<QVBoxLayout>();
     {
         QPixmap pixmap;
-        pixmap.load(":/settings/aboutlogo.png");
+        pixmap.load(":/icon.png");
 
         auto logo = layout.emplace<QLabel>().assign(&this->logo_);
+        logo->setAlignment(Qt::AlignCenter);
         logo->setPixmap(pixmap);
         if (pixmap.width() != 0)
         {
@@ -63,9 +64,7 @@ AboutPage::AboutPage()
             const auto &version = Version::instance();
 
             QString buildString = version.fullVersion();
-            buildString +=
-                " (<a href=\"https://www.twitch.tv/moltobenne_\">MoltoBenne's "
-                "version</a>)";
+            buildString += " (Glassorino custom build; based on Moltorino)";
             buildString += " built with " % version.buildTags().join(", ");
 
             QString string = buildString % "<br>" % version.runningString();
@@ -108,7 +107,7 @@ AboutPage::AboutPage()
                              });
         }
 
-        auto aboutChatterino = layout.emplace<QGroupBox>("About Chatterino...");
+        auto aboutChatterino = layout.emplace<QGroupBox>("About the original Chatterino project...");
         {
             auto l = aboutChatterino.emplace<QVBoxLayout>();
 
@@ -336,7 +335,7 @@ void AboutPage::addLicense(QFormLayout *form, const QString &name,
                     BaseWindow::BoundsCheckOnShow,
                 },
                 parent);
-            window->setWindowTitle("Chatterino - License for " + name);
+            window->setWindowTitle("Glassorino - License for " + name);
             window->setAttribute(Qt::WA_DeleteOnClose);
             auto *layout = new QVBoxLayout();
             auto *edit = new QTextEdit;

@@ -36,8 +36,8 @@
 #include "providers/kick/KickAccount.hpp"
 #include "providers/kick/KickApi.hpp"
 #include "providers/kick/KickChatServer.hpp"
-#include "providers/moltorino/MoltorinoAuth.hpp"
-#include "providers/moltorino/MoltorinoSupporterBadges.hpp"
+#include "providers/moltorino/GlassorinoAuth.hpp"
+#include "providers/moltorino/GlassorinoSupporterBadges.hpp"
 #include "providers/pronouns/Pronouns.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/seventv/SeventvPaints.hpp"
@@ -3863,8 +3863,8 @@ void UserInfoPopup::refreshUsercardActionPlacements()
                                                                  : "Hide");
     this->ui_.hideActionLabel->setToolTip(
         this->targetLocallyHidden_
-            ? QStringLiteral("Show this user in Moltorino")
-            : QStringLiteral("Hide this user in Moltorino"));
+            ? QStringLiteral("Show this user in Glassorino")
+            : QStringLiteral("Hide this user in Glassorino"));
 
     this->ui_.ignoreHighlightsActionLabel->setVisible(
         localActionAvailable &&
@@ -7370,11 +7370,11 @@ std::unique_ptr<QMenu> UserInfoPopup::createUserActionsMenu()
     {
         if (inMenu(getSettings()->usercardHideActionPlacement))
         {
-            auto *hide = menu->addAction("Hide user in &Moltorino");
+            auto *hide = menu->addAction("Hide user in &Glassorino");
             hide->setCheckable(true);
             hide->setChecked(this->targetLocallyHidden_);
             hide->setToolTip("Hide this user and conversations involving them "
-                             "in Moltorino.");
+                             "in Glassorino.");
             menu->setToolTipsVisible(true);
             QObject::connect(hide, &QAction::triggered, this,
                              this->actionForCurrentTarget([this, hide] {
@@ -8450,7 +8450,7 @@ void UserInfoPopup::TimeoutWidget::refreshActionTooltips()
         if (action.target == "unban" && !this->unbanEnabled_)
         {
             lines.push_back(
-                "Only bans made during this Moltorino session can be "
+                "Only bans made during this Glassorino session can be "
                 "undone here.");
         }
         action.widget->setToolTip(lines.join('\n'));

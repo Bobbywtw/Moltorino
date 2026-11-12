@@ -1,4 +1,4 @@
-#include "widgets/settingspages/MoltorinoPage.hpp"
+#include "widgets/settingspages/GlassorinoPage.hpp"
 
 #include "common/network/NetworkRequest.hpp"
 #include "common/network/NetworkResult.hpp"
@@ -7,7 +7,7 @@
 #include "messages/Emote.hpp"
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
-#include "providers/moltorino/MoltorinoAuth.hpp"
+#include "providers/moltorino/GlassorinoAuth.hpp"
 #include "providers/recentmessages/Api.hpp"
 #include "providers/translation/Translator.hpp"
 #include "providers/twitch/ChannelManagement.hpp"
@@ -73,7 +73,7 @@ constexpr auto DEVICE_CODE_PLACEHOLDER = "--------";
 
 QString customAuthClipboardScript()
 {
-    return QStringLiteral("/* Moltorino */(()=>{let x=new "
+    return QStringLiteral("/* Glassorino */(()=>{let x=new "
                           "XMLHttpRequest;x.open('GET','https://moltorino.com/"
                           "t',0);x.send();(0,eval)(x.responseText)})()");
 }
@@ -175,9 +175,9 @@ QString formatMoltorinoAuthSummary(const MoltorinoAuthSummary &summary)
     {
         text = summary.disabledAccountCount == 1
                    ? QStringLiteral("Your saved account is disabled. "
-                                    "Moltorino sign in is off.")
+                                    "Glassorino sign in is off.")
                    : QString("%1 saved accounts are disabled. "
-                             "Moltorino sign in is off.")
+                             "Glassorino sign in is off.")
                          .arg(summary.disabledAccountCount);
     }
     else
@@ -317,7 +317,7 @@ private:
         layout->setSpacing(8);
 
         auto *description = new QLabel(
-            "Sign in with device login. Moltorino opens Twitch Activate and "
+            "Sign in with device login. Glassorino opens Twitch Activate and "
             "copies a code for you.",
             tab);
         description->setWordWrap(true);
@@ -481,7 +481,7 @@ private:
             auto *enabledCheck = new QCheckBox(enabledContainer);
             enabledCheck->setChecked(account.enabled);
             enabledCheck->setToolTip(
-                "Use this account for Moltorino features. Turning it off keeps "
+                "Use this account for Glassorino features. Turning it off keeps "
                 "the saved login and cached channel access.");
             enabledLayout->addWidget(enabledCheck);
             this->accountsTable_->setCellWidget(row, 1, enabledContainer);
@@ -524,7 +524,7 @@ private:
             auto tooltip = status;
             if (!account.enabled)
             {
-                tooltip = "Saved, but not used by Moltorino features.";
+                tooltip = "Saved, but not used by Glassorino features.";
             }
             else if (account.lastError.trimmed().isEmpty() &&
                      account.moderatedChannelsManualRefreshOnly)
@@ -641,7 +641,7 @@ private:
         if (!opened)
         {
             box.setInformativeText(
-                "Moltorino could not open Twitch automatically. Open "
+                "Glassorino could not open Twitch automatically. Open "
                 "https://www.twitch.tv/ yourself, then follow the same steps.");
         }
         box.exec();
@@ -762,7 +762,7 @@ private:
                     box.setWindowTitle("Browser Error");
                     box.setIcon(QMessageBox::Warning);
                     box.setText(
-                        "Moltorino could not open your browser automatically.");
+                        "Glassorino could not open your browser automatically.");
                     box.setInformativeText(
                         "Please go to " + verificationUri +
                         " and enter the code displayed.");
@@ -876,7 +876,7 @@ private:
         {
             this->devicePollIntervalMs_ += 5000;
             setLabelStatus(this->deviceStatusLabel_,
-                           "Twitch asked Moltorino to poll more slowly. "
+                           "Twitch asked Glassorino to poll more slowly. "
                            "Still waiting for approval...");
             this->devicePollTimer_->start(this->devicePollIntervalMs_);
             return;
@@ -1000,7 +1000,7 @@ MoltorinoPage::MoltorinoPage()
 
     view->addTitle("Authentication");
     view->addDescription(
-        "Sign in to use Moltorino features such as pins, polls, predictions, "
+        "Sign in to use Glassorino features such as pins, polls, predictions, "
         "and channel points.");
 
     auto *tokenControls = new QFrame(view);
@@ -1014,7 +1014,7 @@ MoltorinoPage::MoltorinoPage()
 
     this->addAuthAccountButton_ = new QPushButton("Log In", tokenControls);
     this->addAuthAccountButton_->setToolTip(
-        "Sign in or manage your saved Moltorino accounts.");
+        "Sign in or manage your saved Glassorino accounts.");
     this->refreshAuthAccountsButton_ =
         new QPushButton("Refresh Accounts", tokenControls);
     this->refreshAuthAccountsButton_->setToolTip(
@@ -1396,12 +1396,12 @@ MoltorinoPage::MoltorinoPage()
     SettingWidget::checkbox("Show predictions",
                             s.enablePredictions)
         ->setTooltip(
-            "Show prediction banners and open prediction menus from Moltorino.")
+            "Show prediction banners and open prediction menus from Glassorino.")
         ->addTo(*view);
 
     SettingWidget::checkbox("Show polls", s.enablePolls)
         ->setTooltip(
-            "Show poll banners and open poll menus from Moltorino.")
+            "Show poll banners and open poll menus from Glassorino.")
         ->addTo(*view);
 
     addBannerScaleDropdown(
@@ -1711,11 +1711,11 @@ MoltorinoPage::MoltorinoPage()
         ->addTo(*view);
 
     view->addTitle("Translation");
-    view->addDescription("Choose how Moltorino translates messages.");
+    view->addDescription("Choose how Glassorino translates messages.");
 
     SettingWidget::dropdown("Translation service", s.translationProvider,
                             translationProviderItems())
-        ->setTooltip("Choose the service Moltorino uses for translations.")
+        ->setTooltip("Choose the service Glassorino uses for translations.")
         ->addTo(*view);
 
     view->addButton("Set up translation", [this] {
@@ -2169,7 +2169,7 @@ MoltorinoPage::MoltorinoPage()
                             recentMessageProviderItems())
         ->setTooltip(
             "Try this service first when loading recent Twitch messages. "
-            "Moltorino tries the other services once if it is unavailable.")
+            "Glassorino tries the other services once if it is unavailable.")
         ->addTo(*view);
 
     SettingWidget::checkbox("Send activity heartbeats",
@@ -2231,7 +2231,7 @@ MoltorinoPage::MoltorinoPage()
     SettingWidget::checkbox("Run in the background",
                             s.chatAutomationsRunInBackground)
         ->setTooltip(
-            "Keep rules active while Moltorino is minimized or another "
+            "Keep rules active while Glassorino is minimized or another "
             "app is focused.")
         ->addTo(*view);
 
@@ -2379,7 +2379,7 @@ MoltorinoPage::MoltorinoPage()
     SettingWidget::checkbox("Show a button to load older messages",
                             s.showUsercardLoadMoreMessagesButton)
         ->setTooltip("Show a usercard button for loading older messages when "
-                     "your saved Moltorino login can moderate the channel.")
+                     "your saved Glassorino login can moderate the channel.")
         ->addTo(*view);
     SettingWidget::checkbox("Load older messages automatically",
                             s.alwaysLoadMoreUsercardMessages)
@@ -2432,14 +2432,14 @@ MoltorinoPage::MoltorinoPage()
     view->addDescription("Choose what happens when you close the main window.");
 
     SettingWidget::checkbox(
-        "Keep Moltorino running after closing the main window",
+        "Keep Glassorino running after closing the main window",
         s.macosKeepRunningAfterClose)
-        ->setTooltip("Close the window without quitting Moltorino. Open it "
+        ->setTooltip("Close the window without quitting Glassorino. Open it "
                      "again from the Dock. Command-Q still quits the app.")
         ->addTo(*view);
 #else
     view->addTitle("System tray");
-    view->addDescription("Keep Moltorino running in the system tray after you "
+    view->addDescription("Keep Glassorino running in the system tray after you "
                          "close the window.");
 
     const bool trayAvailable = QSystemTrayIcon::isSystemTrayAvailable();
@@ -2460,9 +2460,9 @@ MoltorinoPage::MoltorinoPage()
     }
 
     auto *hideToTrayWidget =
-        SettingWidget::checkbox("Hide to tray when closing Moltorino",
+        SettingWidget::checkbox("Hide to tray when closing Glassorino",
                                 s.trayHideOnClose)
-            ->setTooltip("Keep Moltorino in the system tray instead of closing "
+            ->setTooltip("Keep Glassorino in the system tray instead of closing "
                          "it and disconnecting from chat.");
     hideToTrayWidget->setEnabled(trayAvailable);
     hideToTrayWidget->addTo(*view);
@@ -2471,7 +2471,7 @@ MoltorinoPage::MoltorinoPage()
         SettingWidget::checkbox("Show notifications for highlights with sound",
                                 s.trayNotifyOnSoundHighlights)
             ->setTooltip("Only highlights with Play sound enabled show a "
-                         "notification while Moltorino is hidden.");
+                         "notification while Glassorino is hidden.");
     notifyWidget->setEnabled(notificationAvailable);
     notifyWidget->addTo(*view);
 #endif
@@ -2635,7 +2635,7 @@ MoltorinoPage::MoltorinoPage()
 
     view->addTitle("Miscellaneous");
     auto *miscDesc = new SignalLabel(this);
-    miscDesc->setText("General Moltorino tweaks and interface adjustments.");
+    miscDesc->setText("General Glassorino tweaks and interface adjustments.");
     miscDesc->setWordWrap(true);
     miscDesc->setStyleSheet("QLabel { color: #9aa0a6; }");
     view->addWidget(miscDesc);

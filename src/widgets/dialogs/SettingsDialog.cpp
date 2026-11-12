@@ -49,7 +49,7 @@ SettingsDialog::SettingsDialog(QWidget *parent)
           parent)
 {
     this->setObjectName("SettingsDialog");
-    this->setWindowTitle("Moltorino Settings");
+    this->setWindowTitle("Glassorino Settings");
     // Disable the ? button in the titlebar until we decide to use it
     this->setWindowFlags(this->windowFlags() &
                          ~Qt::WindowContextHelpButtonHint);
@@ -240,7 +240,7 @@ void SettingsDialog::addTabs()
     // clang-format off
     this->addTab([]{return new GeneralPage;},          "General",        ":/settings/about.svg", SettingsTabId::General, 0.88F);
     this->addTab([]{return new CustomizationPage;},    "Customization",  ":/settings/customization.svg", SettingsTabId::Customization, 1.09F);
-    this->addTab([]{return new MoltorinoPage;},        "Moltorino",      ":/settings/moltorino.svg", SettingsTabId::Moltorino, 0.90F);
+    this->addTab([]{return new MoltorinoPage;},        "Glassorino",      ":/settings/moltorino.svg", SettingsTabId::Moltorino, 0.90F);
     this->ui_.tabContainer->addSpacing(16);
     this->addTab([]{return new AccountsPage;},         "Accounts",       ":/settings/accounts.svg", SettingsTabId::Accounts, 1.06F);
     this->addTab([]{return new NicknamesPage;},        "Nicknames",      ":/settings/nicknames.svg", {}, 1.12F);

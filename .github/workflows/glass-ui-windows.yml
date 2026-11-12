@@ -7,6 +7,7 @@ on:
       - liquid-glass-plugin-01
       - liquid-glass-integration-01
       - moltorino-build-optimization-01
+      - glassorino-ui-from-build24
     paths:
       - "**"
       - "!tools/glass-lab/**"
@@ -180,7 +181,7 @@ jobs:
           key: ${{ steps.conan-cache.outputs.cache-primary-key }}
           path: ${{ env.CONAN_HOME }}
 
-      - name: Build Moltorino
+      - name: Build Glassorino
         shell: pwsh
         run: |
           cd build
@@ -254,17 +255,17 @@ jobs:
         shell: pwsh
         run: |
           $packageTimer = [Diagnostics.Stopwatch]::StartNew()
-          New-Item -ItemType Directory Moltorino-Glass -Force | Out-Null
-          Copy-Item bin/* Moltorino-Glass/ -Recurse -Exclude *.pdb
-          windeployqt Moltorino-Glass/Moltorino7.exe --release --no-compiler-runtime --no-translations --no-opengl-sw --qmldir ../tools/glass-lab/qml --dir Moltorino-Glass/ --force-openssl
+          New-Item -ItemType Directory Glassorino -Force | Out-Null
+          Copy-Item bin/* Glassorino/ -Recurse -Exclude *.pdb
+          windeployqt Glassorino/Glassorino.exe --release --no-compiler-runtime --no-translations --no-opengl-sw --qmldir ../tools/glass-lab/qml --dir Glassorino/ --force-openssl
           if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
-          New-Item -ItemType Directory Moltorino-Glass/licenses/Qt6 -Force | Out-Null
-          Copy-Item ../resources/licenses/qt6/* Moltorino-Glass/licenses/Qt6/
-          ..\.CI\deploy-crt.ps1 Moltorino-Glass -Architecture x64
+          New-Item -ItemType Directory Glassorino/licenses/Qt6 -Force | Out-Null
+          Copy-Item ../resources/licenses/qt6/* Glassorino/licenses/Qt6/
+          ..\.CI\deploy-crt.ps1 Glassorino -Architecture x64
           if ($LASTEXITCODE -ne 0) { throw "CRT deployment failed" }
-          ..\.CI\deploy-crt.ps1 Moltorino-Glass/support/media -Architecture x64
+          ..\.CI\deploy-crt.ps1 Glassorino/support/media -Architecture x64
           if ($LASTEXITCODE -ne 0) { throw "Media CRT deployment failed" }
-          7z a Moltorino-Windows.zip Moltorino-Glass/
+          7z a Glassorino-Windows.zip Glassorino/
           if ($LASTEXITCODE -ne 0) { throw "ZIP creation failed" }
           @{ stage = 'package'; seconds = [Math]::Round($packageTimer.Elapsed.TotalSeconds, 3); exitCode = 0 } | ConvertTo-Json | Set-Content metrics/package.json
 
@@ -280,9 +281,9 @@ jobs:
         shell: pwsh
         run: |
           $verifyDir = Join-Path $env:RUNNER_TEMP 'glass-portable-check'
-          Expand-Archive Moltorino-Windows.zip -DestinationPath $verifyDir
-          $packageDir = Join-Path $verifyDir 'Moltorino-Glass'
-          foreach ($file in @('Moltorino7.exe', 'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Widgets.dll', 'Qt6Network.dll', 'Qt6Sql.dll', 'platforms/qwindows.dll', 'sqldrivers/qsqlite.dll', 'tls/qopensslbackend.dll', 'libssl-3-x64.dll', 'libcrypto-3-x64.dll', 'support/media/ffmpeg.exe', 'support/media/ffprobe.exe', 'support/7zip/7z.exe', 'support/7zip/7z.dll')) {
+          Expand-Archive Glassorino-Windows.zip -DestinationPath $verifyDir
+          $packageDir = Join-Path $verifyDir 'Glassorino'
+          foreach ($file in @('Glassorino.exe', 'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Widgets.dll', 'Qt6Network.dll', 'Qt6Sql.dll', 'platforms/qwindows.dll', 'sqldrivers/qsqlite.dll', 'tls/qopensslbackend.dll', 'libssl-3-x64.dll', 'libcrypto-3-x64.dll', 'support/media/ffmpeg.exe', 'support/media/ffprobe.exe', 'support/7zip/7z.exe', 'support/7zip/7z.dll')) {
             if (!(Test-Path (Join-Path $packageDir $file))) { throw "Missing portable file: $file" }
           }
           foreach ($dll in @('Qt6Quick.dll', 'Qt6Qml.dll', 'Qt6QuickWidgets.dll')) {
@@ -305,7 +306,7 @@ jobs:
           $env:QT_PLUGIN_PATH = $packageDir
           $env:QT_QPA_PLATFORM_PLUGIN_PATH = Join-Path $packageDir 'platforms'
           Push-Location $verifyDir
-          foreach ($program in @(@('Moltorino7.exe', '--version'), @('support/media/ffmpeg.exe', '-version'), @('support/media/ffprobe.exe', '-version'))) {
+          foreach ($program in @(@('Glassorino.exe', '--version'), @('support/media/ffmpeg.exe', '-version'), @('support/media/ffprobe.exe', '-version'))) {
             $process = Start-Process -FilePath (Join-Path $packageDir $program[0]) -ArgumentList $program[1] -PassThru -NoNewWindow
             if (!$process.WaitForExit(30000)) {
               $process.Kill()
@@ -320,7 +321,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: Moltorino-Startup-Diagnostics
+          name: Glassorino-Startup-Diagnostics
           path: build/ui-review/
           if-no-files-found: ignore
           overwrite: true
@@ -329,7 +330,7 @@ jobs:
       - name: Upload native UI review
         uses: actions/upload-artifact@v7
         with:
-          name: Moltorino-UI-Review
+          name: Glassorino-UI-Review
           path: build/ui-review/
           overwrite: true
           retention-days: 14
@@ -368,7 +369,7 @@ jobs:
       - name: Upload Glass UI Windows build
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.development_build && 'Moltorino-Development-Windows' || 'Moltorino-Windows' }}
+          name: ${{ inputs.development_build && 'Moltorino-Development-Windows' || 'Glassorino-Windows' }}
           overwrite: true
-          path: build/Moltorino-Windows.zip
+          path: build/Glassorino-Windows.zip
           retention-days: 14

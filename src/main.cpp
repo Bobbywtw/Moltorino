@@ -137,7 +137,7 @@ int main(int argc, char **argv)
     QCoreApplication::setOrganizationDomain("chatterino.com");
 #if defined(Q_OS_LINUX) || defined(Q_OS_FREEBSD)
 
-    QGuiApplication::setDesktopFileName("com.moltobenne.moltorino");
+    QGuiApplication::setDesktopFileName("com.glassorino.glassorino");
 #endif
 #ifdef Q_OS_WIN
     SetCurrentProcessExplicitAppUserModelID(
@@ -238,7 +238,7 @@ int main(int argc, char **argv)
                 << pendingRestoreError;
             QMessageBox::warning(
                 nullptr, QStringLiteral("Settings restore failed"),
-                QStringLiteral("Moltorino could not finish the pending "
+                QStringLiteral("Glassorino could not finish the pending "
                                "restore safely.\n\n%1")
                     .arg(pendingRestoreError));
         }
