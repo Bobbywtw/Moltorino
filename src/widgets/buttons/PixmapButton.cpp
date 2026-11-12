@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 #include "widgets/buttons/PixmapButton.hpp"
+#include <QPainterPath>
+#include <algorithm>
 
 namespace {
 
@@ -86,7 +88,21 @@ void PixmapButton::paintContent(QPainter &painter)
     resizePixmap(this->resizedPixmap_, this->pixmap_, rect.size(),
                  this->devicePixelRatio());
 
-    painter.drawPixmap(rect, this->resizedPixmap_);
+    if (this->property("glassorinoRoundedAvatar").toBool())
+    {
+        painter.save();
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        QPainterPath shape;
+        const qreal radius = std::min(rect.width(), rect.height()) * 0.11;
+        shape.addRoundedRect(QRectF(rect), radius, radius);
+        painter.setClipPath(shape);
+        painter.drawPixmap(rect, this->resizedPixmap_);
+        painter.restore();
+    }
+    else
+    {
+        painter.drawPixmap(rect, this->resizedPixmap_);
+    }
 
     painter.setOpacity(opacity);
 }

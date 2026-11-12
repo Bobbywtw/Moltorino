@@ -5011,8 +5011,9 @@ void SplitInput::paintEvent(QPaintEvent *)
         painter.fillRect(this->rect(), this->theme->splits.background);
     painter.setRenderHint(QPainter::Antialiasing);
     const QRectF input(this->ui_.inputWrapper->geometry());
-    if (!(glass::paint(painter, input, glass::Surface::Composer,
-                       this->focusProgress_, this->scale())))
+    if (!glass::surface(this, input, "composer", this->focusProgress_) &&
+        !glass::paint(painter, input, glass::Surface::Composer,
+                      this->focusProgress_, this->scale()))
     {
         painter.setBrush(this->backgroundColor());
         painter.setPen(QPen(uiMix(ui.border, ui.focus, this->focusProgress_), 1));

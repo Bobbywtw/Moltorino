@@ -5,6 +5,9 @@
 #include "widgets/TooltipEntryWidget.hpp"
 
 #include <QVBoxLayout>
+#include <QPainter>
+#include <QPainterPath>
+#include <algorithm>
 
 namespace chatterino {
 
@@ -101,13 +104,27 @@ bool TooltipEntryWidget::refreshPixmap()
         this->attemptRefresh_ = false;
         return true;
     }
+    // Round tooltip artwork without altering the image shared with live chat.
+    QPixmap display = *pixmap;
     if (!this->customSize.isEmpty())
-    {
-        *pixmap = pixmap->scaled(this->customSize * pixelRatio,
+        display = display.scaled(this->customSize * pixelRatio,
                                  Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    display.setDevicePixelRatio(pixelRatio);
+    QPixmap rounded(display.size());
+    rounded.setDevicePixelRatio(pixelRatio);
+    rounded.fill(Qt::transparent);
+    {
+        QPainter p(&rounded);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        const QRectF bounds(QPointF(0, 0), QSizeF(display.size()) / pixelRatio);
+        const qreal radius = std::min<qreal>(
+            7.0, std::min(bounds.width(), bounds.height()) / 9.0);
+        QPainterPath mask;
+        mask.addRoundedRect(bounds, radius, radius);
+        p.setClipPath(mask);
+        p.drawPixmap(QPointF(0, 0), display);
     }
-    pixmap->setDevicePixelRatio(pixelRatio);
-    this->displayImage_->setPixmap(*pixmap);
+    this->displayImage_->setPixmap(rounded);
     this->displayedFrameKey_ = frameKey;
     this->displayedPixelRatio_ = pixelRatio;
     this->attemptRefresh_ = false;

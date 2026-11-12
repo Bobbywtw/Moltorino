@@ -332,7 +332,7 @@ void TooltipWidget::paintEvent(QPaintEvent *)
     painter.setPen(QPen(ui.border, 1));
     painter.setBrush(ui.surface);
     painter.drawRoundedRect(QRectF(this->rect()).adjusted(0.5, 0.5, -0.5, -0.5),
-                            6, 6);
+                             9, 9);
 }
 
 void TooltipWidget::scaleChangedEvent(float)

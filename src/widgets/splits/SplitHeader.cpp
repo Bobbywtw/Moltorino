@@ -2402,9 +2402,11 @@ void SplitHeader::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
     const auto &ui = uiPalette(this->theme->isLightTheme());
-    if (!(glass::paint(painter, QRectF(this->rect()).adjusted(4, 2, -4, -2),
-                       glass::Surface::ChannelHeader,
-                       this->split_->hasFocus() ? 1.0 : 0.0, this->scale())))
+    if (!glass::surface(this, QRectF(this->rect()).adjusted(4, 2, -4, -2),
+                        "header", this->split_->hasFocus() ? 1.0 : 0.0) &&
+        !glass::paint(painter, QRectF(this->rect()).adjusted(4, 2, -4, -2),
+                      glass::Surface::ChannelHeader,
+                      this->split_->hasFocus() ? 1.0 : 0.0, this->scale()))
     {
         painter.fillRect(this->rect(), ui.surface);
         painter.fillRect(0, this->height() - 1, this->width(), 1, ui.border);

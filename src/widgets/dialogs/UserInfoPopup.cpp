@@ -1965,6 +1965,7 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
 
         auto *avatar = new PixmapButton(nullptr);
         this->ui_.avatarButton = avatar;
+        avatar->setProperty("glassorinoRoundedAvatar", true);
         avatar->setScaleIndependentSize(100, 100);
         avatar->setDim(DimButton::Dim::None);
         avatarLayout->addWidget(avatar, 0, 0);
