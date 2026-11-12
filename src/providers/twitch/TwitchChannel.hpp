@@ -935,6 +935,8 @@ private:
     friend class IrcMessageHandler;
     friend class Commands_E2E_Test;
     friend class TwitchChannelTestAccess;
+    // Offline UI-review fixture can model moderator-only dialogs without auth.
+    friend class ApplicationReview;
     friend class ::TestIrcMessageHandlerP;
     friend class ::TestEventSubMessagesP;
 
