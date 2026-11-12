@@ -4,7 +4,8 @@
 #include <QRectF>
 class QWidget;
 namespace chatterino::glass {
-// Application-owned backdrop only; never reads the desktop or account storage.
+// GPU chrome with compositor-owned desktop acrylic on supported Windows.
+// No screen capture or account storage access.
 void installChrome();
 // Explicitly tear down QQuickWidget scene graphs before QApplication quits.
 void shutdownChrome();

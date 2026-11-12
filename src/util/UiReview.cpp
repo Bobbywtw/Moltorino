@@ -7,14 +7,23 @@
 #include "messages/Image.hpp"
 #include "messages/Message.hpp"
 #include "messages/MessageBuilder.hpp"
+#include "providers/twitch/TwitchChannel.hpp"
+#include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
 #include "widgets/buttons/Button.hpp"
+#include "widgets/ChatterListWidget.hpp"
+#include "widgets/dialogs/ChannelManagementDialog.hpp"
 #include "widgets/dialogs/EmotePopup.hpp"
+#include "widgets/dialogs/PollDialog.hpp"
+#include "widgets/dialogs/PredictionDialog.hpp"
 #include "widgets/dialogs/SettingsDialog.hpp"
 #include "widgets/dialogs/UserInfoPopup.hpp"
+#include "widgets/dialogs/VanityDialog.hpp"
 #include "widgets/glass/GlassChrome.hpp"
+#include "widgets/helper/ChannelView.hpp"
 #include "widgets/helper/NotebookTab.hpp"
+#include "widgets/Label.hpp"
 #include "widgets/Notebook.hpp"
 #include "widgets/splits/Split.hpp"
 #include "widgets/splits/SplitContainer.hpp"
@@ -24,22 +33,28 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QComboBox>
 #include <QCursor>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLineEdit>
+#include <QListView>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QScreen>
+#include <QTabWidget>
 #include <QTimer>
 
 #include <functional>
 
 namespace chatterino {
-namespace {
 class ApplicationReview final : public QObject
 {
     Window *window_;
@@ -48,6 +63,180 @@ class ApplicationReview final : public QObject
     QJsonObject measurements_;
     bool valid_ = true;
     QImage on_;
+    std::shared_ptr<TwitchChannel> toolsChannel_;
+    void finish()
+    {
+        write("composer.json", measurements_);
+        qInfo().noquote()
+            << "GLASS_UI_REVIEW"
+            << QJsonDocument(measurements_).toJson(QJsonDocument::Compact);
+        qApp->exit(valid_ ? 0 : 1);
+    }
+    void toolsReview(int step = 0)
+    {
+        // No connection, room ID, token or mutating provider action. Exercise
+        // the real dialogs with deterministic data and native input widgets.
+        if (!toolsChannel_)
+        {
+            toolsChannel_ = std::make_shared<TwitchChannel>("community", true);
+            toolsChannel_->setMod(true);
+            for (const auto &name : {"mira", "Alex", "pixelpilot", "river"})
+                toolsChannel_->addRecentChatter(name);
+            getSettings()->chatterListDataMode = "local";
+        }
+        QWidget *tool = nullptr;
+        QString name;
+        switch (step)
+        {
+            case 0: {
+                ChannelManagementState state;
+                state.access = ChannelManagementAccess::Editor;
+                state.metadata.title =
+                    "Community night — games and conversation";
+                state.metadata.language = "en";
+                state.metadata.category = {
+                    "509658", "Just Chatting", "Just Chatting", {}};
+                state.metadata.tags = {"English", "Community"};
+                auto *editor =
+                    new ChannelManagementDialog(toolsChannel_, window_, state);
+                valid_ &= editor->titleEdit_->isEnabled();
+                editor->titleEdit_->setPlainText(QString(150, 'x'));
+                valid_ &= editor->hasInvalidTitle() &&
+                          !editor->saveButton_->isEnabled();
+                editor->titleEdit_->setPlainText(
+                    "Community night — welcome everyone!");
+                editor->tagInput_->setText("Friendly");
+                editor->addTagButton_->click();
+                const auto update = editor->buildUpdate();
+                const bool edited = update.title.has_value() && update.tags &&
+                                    update.tags->contains("Friendly") &&
+                                    editor->saveButton_->isEnabled();
+                measurements_["editorValidationAndDraft"] = edited;
+                valid_ &= edited;
+                tool = editor;
+                name = "stream-info";
+                break;
+            }
+            case 1:
+                tool = new ChatterListWidget(toolsChannel_, window_);
+                tool->resize(440, 500);
+                name = "chatters";
+                break;
+            case 2:
+                tool = new VanityDialog(toolsChannel_, window_);
+                name = "vanity";
+                break;
+            case 3:
+            case 4: {
+                auto *poll = new PollDialog(toolsChannel_.get(), window_);
+                if (step == 4)
+                {
+                    TwitchChannel::PollEvent event;
+                    event.id = "review-poll";
+                    event.title = "What should we play next?";
+                    event.status = "ACTIVE";
+                    event.choices = {{"a", "Adventure", 32},
+                                     {"b", "Puzzle", 18},
+                                     {"c", "Racing", 12}};
+                    event.totalVotes = 62;
+                    event.durationSeconds = 300;
+                    event.remainingDurationMilliseconds = 240000;
+                    event.createdAt = QDateTime::currentDateTimeUtc();
+                    poll->setPoll(event);
+                }
+                tool = poll;
+                name = step == 3 ? "poll-create" : "poll-active";
+                break;
+            }
+            case 5:
+            case 6: {
+                auto *prediction =
+                    new PredictionDialog(toolsChannel_.get(), window_);
+                if (step == 6)
+                {
+                    TwitchChannel::PredictionEvent event;
+                    event.id = "review-prediction";
+                    event.title = "Will we finish the challenge?";
+                    event.status = "LOCKED";
+                    event.outcomes = {{"a", "Yes", "BLUE", 3200, 32},
+                                      {"b", "Not this time", "PINK", 1800, 18}};
+                    event.createdAt = QDateTime::currentDateTimeUtc();
+                    prediction->setPrediction(event);
+                }
+                tool = prediction;
+                name = step == 5 ? "prediction-create" : "prediction-manage";
+                break;
+            }
+            default:
+                finish();
+                return;
+        }
+        tool->show();
+        tool->move(window_->mapToGlobal(QPoint(130, 70)));
+        tool->raise();
+        tool->activateWindow();
+        later(650, [this, tool, name, step] {
+            save(tool, name);
+            if (step == 1)
+            {
+                auto *search = tool->findChild<QLineEdit *>();
+                auto *list = tool->findChild<QListView *>();
+                const int before = list ? list->model()->rowCount() : 0;
+                if (search)
+                    search->setText("mira");
+                later(250, [this, tool, list, before, step] {
+                    const bool filtered = list &&
+                                          before > list->model()->rowCount() &&
+                                          list->model()->rowCount() > 0;
+                    valid_ &= filtered;
+                    measurements_["chatterSearch"] = filtered;
+                    save(tool, "chatters-search");
+                    tool->close();
+                    toolsReview(step + 1);
+                });
+                return;
+            }
+            if (step == 2)
+            {
+                vanityTabs(tool, 0);
+                return;
+            }
+            if (step == 3 || step == 5)
+            {
+                auto fields = tool->findChildren<QLineEdit *>();
+                int edited = 0;
+                for (auto *field : fields)
+                    if (field->isVisibleTo(tool) && field->isEnabled() &&
+                        !field->isReadOnly())
+                    {
+                        field->setText(edited++ ? "Example option"
+                                                : "Community challenge");
+                    }
+                valid_ &= edited >= 3;
+                measurements_[name + "EditableFields"] = edited;
+                save(tool, name + "-edited");
+            }
+            tool->close();
+            toolsReview(step + 1);
+        });
+    }
+    void vanityTabs(QWidget *tool, int index)
+    {
+        auto *tabs = tool->findChild<QTabWidget *>();
+        if (!tabs || index >= tabs->count())
+        {
+            valid_ &= tabs && tabs->count() >= 5;
+            measurements_["vanityTabs"] = tabs ? tabs->count() : 0;
+            tool->close();
+            toolsReview(3);
+            return;
+        }
+        tabs->setCurrentIndex(index);
+        later(250, [this, tool, index] {
+            save(tool, QString("vanity-tab-%1").arg(index));
+            vanityTabs(tool, index + 1);
+        });
+    }
     void later(int ms, std::function<void()> next)
     {
         QTimer::singleShot(ms, this, std::move(next));
@@ -81,8 +270,10 @@ class ApplicationReview final : public QObject
             if (glass::enabled())
             {
                 const auto info = glass::diagnostics(card);
-                valid_ &= info["backdropSource"].toString() == "owner-window" &&
-                          info["ownerCaptureValid"].toBool();
+                valid_ &=
+                    info["desktopBackdrop"].toBool() ||
+                    (info["backdropSource"].toString() == "owner-window" &&
+                     info["ownerCaptureValid"].toBool());
                 // The empty history area overlaps the fixture's dense chat.
                 // Sharp background glyphs previously passed the mapping check
                 // while making the card unreadable. Measure their edge contrast
@@ -119,9 +310,17 @@ class ApplicationReview final : public QObject
                     if (glass::enabled())
                         valid_ &= !glass::diagnostics(card)["ownerCaptureValid"]
                                        .toBool();
-                    card->close();
-                    write("composer.json", measurements_);
-                    qApp->exit(valid_ ? 0 : 1);
+                    card->move(window_->mapToGlobal(QPoint(80, 80)));
+                    card->ui_.nameLabel->setText("Mira");
+                    card->ui_.bioLabel->setText(
+                        "Community member • offline review fixture");
+                    card->ui_.latestMessages->setChannel(split_->getChannel());
+                    card->ui_.noMessagesLabel->hide();
+                    later(250, [this, card] {
+                        save(card, "usercard-populated");
+                        card->close();
+                        toolsReview();
+                    });
                 });
             });
         });
@@ -313,7 +512,6 @@ public:
         });
     }
 };
-}  // namespace
 void scheduleUiReview()
 {
     const auto output = qEnvironmentVariable("MOLTORINO_UI_REVIEW_DIR");
@@ -331,6 +529,10 @@ void scheduleUiReview()
             getTheme()->customization.wallpaperSource =
                 qEnvironmentVariable("MOLTORINO_UI_REVIEW_WALLPAPER");
             getTheme()->customization.wallpaperOverlayOpacity = 42;
+            // Match the transparent message rows generated for a real
+            // wallpaper theme, rather than leaving the old Dark row fills.
+            getTheme()->messages.backgrounds.regular.setAlpha(0);
+            getTheme()->messages.backgrounds.alternate.setAlpha(0);
             getTheme()->updated.invoke();
         }
         auto &window = getApp()->getWindows()->getMainWindow();

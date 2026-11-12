@@ -2178,7 +2178,8 @@ public:
 
 ChatterListWidget::ChatterListWidget(std::shared_ptr<Channel> channel,
                                      QWidget *parent)
-    : BaseWindow(BaseWindow::CloseOnMinimize, parent)
+    : BaseWindow({BaseWindow::CloseOnMinimize, BaseWindow::EnableCustomFrame},
+                 parent)
     , d_(std::make_unique<ChatterListWidgetPrivate>(this, std::move(channel)))
 {
     assert(this->d_->channel != nullptr);

@@ -67,6 +67,9 @@ foreach ($testCase in @(
     foreach ($capture in @('chat.png', 'chat-hover.png', 'chat-pressed.png', 'chat-resized.png', 'menu.png', 'settings.png', 'emotes.png', 'dialog.png', 'usercard.png', 'usercard-moved.png', 'composer.json', 'chrome.json')) {
         if (!(Test-Path (Join-Path $env:MOLTORINO_UI_REVIEW_DIR $capture))) { throw "Missing native Qt capture: $theme/$capture" }
     }
+    foreach ($capture in @('usercard-populated.png', 'stream-info.png', 'chatters.png', 'chatters-search.png', 'vanity.png', 'vanity-tab-0.png', 'poll-create.png', 'poll-create-edited.png', 'poll-active.png', 'prediction-create.png', 'prediction-create-edited.png', 'prediction-manage.png')) {
+        if (!(Test-Path (Join-Path $env:MOLTORINO_UI_REVIEW_DIR $capture))) { throw "Missing tool review: $theme/$capture" }
+    }
     if (!$testCase.disableGpu) {
         $gpu = Get-Content (Join-Path $env:MOLTORINO_UI_REVIEW_DIR 'chrome.json') -Raw | ConvertFrom-Json
         if (!$gpu.available -or !$gpu.qmlReady -or $gpu.graphicsApi -ne 4) { throw 'Actual Moltorino is not using the D3D11 GPU material' }

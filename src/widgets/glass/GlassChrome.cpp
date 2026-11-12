@@ -9,6 +9,7 @@
 #    include "singletons/ThemeVideoDecoder.hpp"
 #    include "widgets/AccountSwitchPopup.hpp"
 #    include "widgets/BasePopup.hpp"
+#    include "widgets/BaseWindow.hpp"
 #    include "widgets/buttons/Button.hpp"
 #    include "widgets/dialogs/EmotePopup.hpp"
 #    include "widgets/dialogs/SettingsDialog.hpp"
@@ -33,6 +34,7 @@
 #    include <QLineEdit>
 #    include <QMenu>
 #    include <QMouseEvent>
+#    include <QOperatingSystemVersion>
 #    include <QPainter>
 #    include <QPlainTextEdit>
 #    include <QPointer>
@@ -55,6 +57,12 @@
 #    include <atomic>
 #    include <memory>
 #    include <optional>
+
+#    ifdef USEWINSDK
+#        include <dwmapi.h>
+#        include <qt_windows.h>
+#        pragma comment(lib, "Dwmapi.lib")
+#    endif
 
 namespace chatterino::glass {
 namespace {
@@ -200,6 +208,29 @@ bool settingsWindow(const QWidget *window)
     return dynamic_cast<const SettingsDialog *>(window) != nullptr;
 }
 
+void prepareDesktopBackdrop(QWidget *window)
+{
+#    ifdef USEWINSDK
+    if (!window->isWindow() || window->inherits("chatterino::Window") ||
+        settingsWindow(window) ||
+        window->property("moltorinoDesktopBackdrop").toBool() ||
+        qEnvironmentVariableIsSet("MOLTORINO_GLASS_DISABLE_DESKTOP") ||
+        QOperatingSystemVersion::current().microVersion() < 22621)
+        return;
+    // Qt requires a frameless alpha surface. BaseWindow's own caption and
+    // native hit testing remain intact; never remove an OS-owned title bar.
+    auto *base = dynamic_cast<BaseWindow *>(window);
+    if (!(window->windowFlags() & Qt::FramelessWindowHint) &&
+        !(base && base->hasCustomWindowFrame()))
+        return;
+    window->setProperty("moltorinoDesktopBackdrop", true);
+    window->setWindowFlag(Qt::FramelessWindowHint);
+    window->setAttribute(Qt::WA_TranslucentBackground);
+#    else
+    Q_UNUSED(window);
+#    endif
+}
+
 // Preserve semantic colors (badges, outcomes, selections) and all metrics.
 // Only dark opaque stylesheet fills become readable translucent panels.
 QString panelStyles(QString sheet)
@@ -300,6 +331,8 @@ public:
     bool capturing = false;
     bool popupDirty = true;
     bool ownedPopup = false;
+    bool desktopBackdrop = false;
+    WId backdropWindowId = 0;
     QHash<QWidget *, QPair<QString, QString>> styled;
     QList<QPointer<QWidget>> clearedBackgrounds;
     QList<QPointer<ChannelView>> transparentViews;
@@ -307,8 +340,8 @@ public:
     explicit Chrome(QWidget *parent)
         : QQuickWidget(parent)
     {
-        // Popovers refract only pixels of their owning Moltorino window.
-        // This capture stays in memory, is never saved, and never reads the desktop.
+        // Windows 11 supplies the live desktop through DWM. The owner capture
+        // is the fallback on older systems; neither path captures the screen.
         if (!parent->inherits("chatterino::Window") && !settingsWindow(parent))
         {
             ownedPopup = true;
@@ -404,9 +437,46 @@ public:
         }
         request();
     }
+    void updateDesktopBackdrop()
+    {
+#    ifdef USEWINSDK
+        auto *window = parentWidget();
+        if (!window->property("moltorinoDesktopBackdrop").toBool() ||
+            !window->internalWinId() ||
+            backdropWindowId == window->internalWinId())
+            return;
+        backdropWindowId = window->internalWinId();
+        const auto hwnd = reinterpret_cast<HWND>(backdropWindowId);
+        // Values are documented in the Windows 11 SDK. Runtime HRESULT checks
+        // also allow builds using older Windows SDK headers.
+        constexpr auto systemBackdrop = static_cast<DWMWINDOWATTRIBUTE>(38);
+        const int acrylic =
+            3;  // DWMSBT_TRANSIENTWINDOW, actual desktop acrylic
+        const BOOL dark = TRUE;
+        DwmSetWindowAttribute(hwnd, static_cast<DWMWINDOWATTRIBUTE>(20), &dark,
+                              sizeof(dark));
+        const MARGINS margins{-1, -1, -1, -1};
+        desktopBackdrop =
+            SUCCEEDED(DwmExtendFrameIntoClientArea(hwnd, &margins)) &&
+            SUCCEEDED(DwmSetWindowAttribute(hwnd, systemBackdrop, &acrylic,
+                                            sizeof(acrylic)));
+        if (rootObject())
+            rootObject()->setProperty("systemBackdrop", desktopBackdrop);
+        popupBackdrop = {};
+        backdropKey.clear();
+        if (desktopBackdrop)
+            popupRefresh.stop();
+        else if (popupOwner)
+        {
+            popupDirty = true;
+            popupRefresh.start();
+        }
+#    endif
+    }
     void capturePopupBackdrop()
     {
-        if (capturing || !popupDirty || isAppAboutToQuit() || !tryGetApp())
+        if (desktopBackdrop || capturing || !popupDirty || isAppAboutToQuit() ||
+            !tryGetApp())
             return;
         popupDirty = false;
         if (!popupOwner || !popupOwner->isVisible() ||
@@ -451,6 +521,16 @@ public:
     {
         failed = true;
         popupRefresh.stop();
+#    ifdef USEWINSDK
+        if (desktopBackdrop && parentWidget()->internalWinId())
+        {
+            const int none = 1;  // DWMSBT_NONE
+            DwmSetWindowAttribute(
+                reinterpret_cast<HWND>(parentWidget()->internalWinId()),
+                static_cast<DWMWINDOWATTRIBUTE>(38), &none, sizeof(none));
+            desktopBackdrop = false;
+        }
+#    endif
         qWarning() << "GLASS_GPU_ERROR" << message;
         QTimer::singleShot(0, this, [this] {
             hide();
@@ -657,6 +737,7 @@ public:
             return;
         if (failed || !parentWidget()->isVisible())
             return;
+        updateDesktopBackdrop();
         if (geometry() != parentWidget()->rect())
             setGeometry(parentWidget()->rect());
         updateBackdrop();
@@ -804,6 +885,8 @@ class ChromeEvents final : public QObject
         if (!w || constructing || w->inherits("QQuickWidget") ||
             w->objectName() == "moltorinoGpuChrome")
             return false;
+        if (event->type() == QEvent::Polish && w->isWindow())
+            prepareDesktopBackdrop(w);
         if (event->type() == QEvent::Paint || event->type() == QEvent::Move ||
             event->type() == QEvent::Resize || event->type() == QEvent::Show ||
             event->type() == QEvent::Hide)
@@ -825,9 +908,16 @@ class ChromeEvents final : public QObject
             return false;
         if (w == c->parentWidget())
         {
+            if (event->type() == QEvent::WinIdChange ||
+                event->type() == QEvent::ThemeChange)
+            {
+                c->backdropWindowId = 0;
+                c->request();
+            }
             if (event->type() == QEvent::Hide)
                 c->popupRefresh.stop();
-            if (event->type() == QEvent::Show && c->popupOwner)
+            if (event->type() == QEvent::Show && c->popupOwner &&
+                !c->desktopBackdrop)
                 c->popupRefresh.start();
         }
         switch (event->type())
@@ -931,8 +1021,10 @@ QJsonObject diagnostics(QWidget *window)
     result["qmlReady"] = c->status() == QQuickWidget::Ready;
     result["backdropRevision"] = c->revision;
     result["renderedFrames"] = c->frames.load();
-    result["backdropSource"] =
-        c->ownedPopup ? "owner-window" : "chat-wallpaper";
+    result["backdropSource"] = c->desktopBackdrop ? "system-desktop"
+                               : c->ownedPopup    ? "owner-window"
+                                                  : "chat-wallpaper";
+    result["desktopBackdrop"] = c->desktopBackdrop;
     result["ownerCaptureValid"] = !c->popupBackdrop.isNull();
     result["settingsControlsPreserved"] = settingsWindow(window);
     QJsonObject baked;

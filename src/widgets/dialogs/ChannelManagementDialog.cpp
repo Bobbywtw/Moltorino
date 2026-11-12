@@ -226,7 +226,8 @@ void ChannelManagementDialog::showForChannel(
 }
 
 ChannelManagementDialog::ChannelManagementDialog(
-    std::shared_ptr<TwitchChannel> channel, QWidget *parent)
+    std::shared_ptr<TwitchChannel> channel, QWidget *parent,
+    std::optional<ChannelManagementState> initialState)
     : DraggablePopup(true, parent)
     , channel_(std::move(channel))
 {
@@ -629,7 +630,18 @@ ChannelManagementDialog::ChannelManagementDialog(
     }
     this->updateTitleCounter();
     this->refreshStyle();
-    this->loadState();
+    if (initialState)
+    {
+        this->loaded_ = true;
+        this->applyState(std::move(*initialState));
+        this->setLoadingVisual(false);
+        this->updateCommercialAvailability();
+        this->updateControls();
+    }
+    else
+    {
+        this->loadState();
+    }
 }
 
 void ChannelManagementDialog::loadState()

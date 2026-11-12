@@ -44,8 +44,10 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
-    explicit ChannelManagementDialog(std::shared_ptr<TwitchChannel> channel,
-                                     QWidget *parent = nullptr);
+    friend class ApplicationReview;
+    explicit ChannelManagementDialog(
+        std::shared_ptr<TwitchChannel> channel, QWidget *parent = nullptr,
+        std::optional<ChannelManagementState> initialState = std::nullopt);
 
     void loadState();
     void prepareLoadingState();

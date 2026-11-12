@@ -92,6 +92,7 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
 
 private:
+    friend class ApplicationReview;
     void addShortcuts() override;
 
     void registerMnemonicButton(LabelButton *button, int key,
