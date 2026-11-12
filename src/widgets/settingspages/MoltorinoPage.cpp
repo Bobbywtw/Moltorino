@@ -1,4 +1,4 @@
-#include "widgets/settingspages/GlassorinoPage.hpp"
+#include "widgets/settingspages/MoltorinoPage.hpp"
 
 #include "common/network/NetworkRequest.hpp"
 #include "common/network/NetworkResult.hpp"
@@ -7,7 +7,7 @@
 #include "messages/Emote.hpp"
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
-#include "providers/moltorino/GlassorinoAuth.hpp"
+#include "providers/moltorino/MoltorinoAuth.hpp"
 #include "providers/recentmessages/Api.hpp"
 #include "providers/translation/Translator.hpp"
 #include "providers/twitch/ChannelManagement.hpp"

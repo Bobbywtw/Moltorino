@@ -4,7 +4,7 @@
 
 #include "widgets/dialogs/UpdateDialog.hpp"
 
-#include "providers/moltorino/GlassorinoUpdater.hpp"
+#include "providers/moltorino/MoltorinoUpdater.hpp"
 #include "widgets/Label.hpp"
 
 #include <QDesktopServices>

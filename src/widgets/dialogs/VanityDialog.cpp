@@ -14,7 +14,7 @@
 #include "providers/ffz/FfzBadges.hpp"
 #include "providers/ffzap/FfzApBadges.hpp"
 #include "providers/homies/HomiesBadges.hpp"
-#include "providers/moltorino/GlassorinoAuth.hpp"
+#include "providers/moltorino/MoltorinoAuth.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/seventv/SeventvPaints.hpp"
 #include "providers/twitch/api/Helix.hpp"
