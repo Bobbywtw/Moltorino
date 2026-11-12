@@ -11,6 +11,8 @@
 #    include "widgets/BasePopup.hpp"
 #    include "widgets/buttons/Button.hpp"
 #    include "widgets/dialogs/EmotePopup.hpp"
+#    include "widgets/dialogs/SettingsDialog.hpp"
+#    include "widgets/dialogs/UserInfoPopup.hpp"
 #    include "widgets/helper/ChannelView.hpp"
 #    include "widgets/helper/NotebookTab.hpp"
 #    include "widgets/splits/Split.hpp"
@@ -26,6 +28,11 @@
 #    include <QEvent>
 #    include <QFile>
 #    include <QImage>
+#    include <QHash>
+#    include <QLabel>
+#    include <QRegularExpression>
+#    include <QPlainTextEdit>
+#    include <QTextEdit>
 #    include <QJsonArray>
 #    include <QLineEdit>
 #    include <QMenu>
@@ -187,6 +194,48 @@ class Chrome;
 QList<Chrome *> layers;
 bool constructing = false;
 
+bool preserveNativeSettings(const QWidget *window)
+{
+    return dynamic_cast<const SettingsDialog *>(window) != nullptr;
+}
+
+// Clear neutral dark panel fills over glass without recoloring semantic
+// badges, warning states, progress indicators, or the Settings window.
+QString clearChromeBackgrounds(QString sheet)
+{
+    static const QRegularExpression fill(
+        QStringLiteral(R"((?<![-\w])background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,8})\s*;)"));
+    static const QRegularExpression semantic(
+        QStringLiteral("Swatch|ColorPreview|ColorPicker|Badge|Progress|Indicator"),
+        QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression shell(
+        QStringLiteral("#\\w*(?:Root|Content|Header|Footer|ScrollArea)(?:\\s|,|$)"));
+    struct Replacement { qsizetype start; qsizetype length; QString value; };
+    QList<Replacement> edits;
+    auto hits = fill.globalMatch(sheet);
+    while (hits.hasNext())
+    {
+        const auto hit = hits.next();
+        const auto open = sheet.lastIndexOf('{', hit.capturedStart());
+        const auto previous = sheet.lastIndexOf('}', open);
+        const auto selector = sheet.mid(previous + 1, open - previous - 1);
+        if (semantic.match(selector).hasMatch())
+            continue;
+        QColor color(hit.captured(1));
+        if (!color.isValid() || color.alpha() < 240 ||
+            color.lightnessF() > 0.32 || color.hsvSaturationF() > 0.25)
+            continue;
+        color.setAlpha(shell.match(selector).hasMatch() ? 0 : 55);
+        edits.append({hit.capturedStart(1), hit.capturedLength(1),
+                      QStringLiteral("rgba(%1,%2,%3,%4)")
+                          .arg(color.red()).arg(color.green())
+                          .arg(color.blue()).arg(color.alpha())});
+    }
+    for (auto it = edits.crbegin(); it != edits.crend(); ++it)
+        sheet.replace(it->start, it->length, it->value);
+    return sheet;
+}
+
 // QMenu and Qt's tooltip label paint foreground directly on their window.
 // Replay that native paint ABOVE the GPU child without rendering children or
 // replacing actions, shortcuts, accessibility, submenu logic or hit testing.
@@ -243,16 +292,20 @@ public:
     QElapsedTimer videoThrottle;
     int frames = 0;
     QList<QRectF> wallpaperGeometry;
+    QHash<QWidget *, QPair<QString, QString>> styled;
+    QList<QPointer<QWidget>> clearedBackgrounds;
+    QList<QPointer<ChannelView>> transparentViews;
     explicit Chrome(QWidget *parent)
         : QQuickWidget(parent)
     {
         // Popovers refract only pixels of their owning Moltorino window.
         // This capture stays in memory, is never saved, and never reads the desktop.
-        if (parent->windowType() == Qt::Popup ||
+        if (!dynamic_cast<UserInfoPopup *>(parent) &&
+            (parent->windowType() == Qt::Popup ||
             parent->windowType() == Qt::ToolTip ||
             qobject_cast<QMenu *>(parent) ||
             dynamic_cast<BasePopup *>(parent) ||
-            dynamic_cast<AccountSwitchPopup *>(parent))
+            dynamic_cast<AccountSwitchPopup *>(parent)))
         {
             auto *owner = parent->parentWidget()
                               ? parent->parentWidget()->window()
@@ -271,7 +324,17 @@ public:
         if (popupOwner)
             popupRefresh.start();
         layers.push_back(this);
-        setObjectName("moltorinoGpuChrome");
+        setObjectName("glassorinoGpuChrome");
+        if (auto *menu = qobject_cast<QMenu *>(parent))
+        {
+            menu->setAttribute(Qt::WA_TranslucentBackground);
+            menu->setStyleSheet(menu->styleSheet() + QStringLiteral(
+                "QMenu { background: rgba(22,24,29,45); "
+                "border: 1px solid rgba(245,248,255,65); "
+                "border-radius: 9px; padding: 4px; } "
+                "QMenu::item { border-radius: 6px; padding: 5px 9px; } "
+                "QMenu::item:selected { background: rgba(178,198,219,40); }"));
+        }
         videoThrottle.start();
         connect(
             quickWindow(), &QQuickWindow::afterRendering, this,
@@ -354,6 +417,21 @@ public:
         qWarning() << "GLASS_GPU_ERROR" << message;
         QTimer::singleShot(0, this, [this] {
             hide();
+            for (auto it = styled.cbegin(); it != styled.cend(); ++it)
+                if (it.key() && it.key()->styleSheet() == it.value().second)
+                    it.key()->setStyleSheet(it.value().first);
+            for (const auto &w : clearedBackgrounds)
+                if (w)
+                    w->setAutoFillBackground(true);
+            for (const auto &view : transparentViews)
+                if (view)
+                    view->setTransparentBackground(false);
+            for (auto *w : parentWidget()->findChildren<QWidget *>())
+            {
+                w->setProperty("liquidGlassSurface", false);
+                w->style()->unpolish(w);
+                w->style()->polish(w);
+            }
             if (foreground)
                 foreground->hide();
             parentWidget()->setAutoFillBackground(true);
@@ -391,7 +469,7 @@ public:
             {
                 video = ThemeVideo::acquire(videoSource, this);
                 connect(video.get(), &ThemeVideo::frameChanged, this, [this] {
-                    if (videoThrottle.elapsed() >= 125)
+                    if (videoThrottle.elapsed() >= 33)
                     {
                         videoThrottle.restart();
                         backdropKey.clear();
@@ -525,6 +603,9 @@ public:
         if (geometry() != parentWidget()->rect())
             setGeometry(parentWidget()->rect());
         updateBackdrop();
+        const bool settings = preserveNativeSettings(parentWidget());
+        if (!settings && parentWidget()->autoFillBackground())
+            parentWidget()->setAutoFillBackground(false);
         if (!parentWidget()->inherits("chatterino::Window"))
             panels.put(parentWidget(),
                        parentWidget()->rect().adjusted(1, 1, -1, -1), "window",
@@ -535,17 +616,48 @@ public:
             if (w->window() != parentWidget() || !w->isVisible() || w == this ||
                 w == foreground || isAncestorOf(w))
                 continue;
+            if (auto *view = dynamic_cast<ChannelView *>(w))
+            {
+                // Preserve native chat text. A usercard history must reveal the
+                // same wallpaper, never a second captured copy of the chat.
+                if ((dynamic_cast<EmotePopup *>(parentWidget()) ||
+                     dynamic_cast<UserInfoPopup *>(parentWidget())) &&
+                    !view->getTransparentBackground())
+                {
+                    transparentViews.append(view);
+                    view->setTransparentBackground(true);
+                }
+                continue;
+            }
+            bool inChat = false;
+            for (auto *p = w->parentWidget(); p && p != parentWidget();
+                 p = p->parentWidget())
+                if (dynamic_cast<ChannelView *>(p))
+                    inChat = true;
+            if (inChat || settings)
+                continue;
+            if (w->autoFillBackground())
+            {
+                clearedBackgrounds.append(w);
+                w->setAutoFillBackground(false);
+            }
             if (auto *scroll = qobject_cast<QScrollArea *>(w))
             {
                 scroll->viewport()->setAutoFillBackground(false);
                 if (scroll->widget())
                     scroll->widget()->setAutoFillBackground(false);
             }
-            if (dynamic_cast<EmotePopup *>(parentWidget()))
+            const auto current = w->styleSheet();
+            if (!current.isEmpty() &&
+                (!styled.contains(w) || styled.value(w).second != current))
             {
-                if (auto *view = dynamic_cast<ChannelView *>(w);
-                    view && !view->getTransparentBackground())
-                    view->setTransparentBackground(true);
+                const auto material = clearChromeBackgrounds(current);
+                if (!styled.contains(w))
+                    connect(w, &QObject::destroyed, this,
+                            [this, w] { styled.remove(w); });
+                styled[w] = {current, material};
+                if (material != current)
+                    w->setStyleSheet(material);
             }
             if (dynamic_cast<Button *>(w) && !dynamic_cast<NotebookTab *>(w))
             {
@@ -612,7 +724,7 @@ class ChromeEvents final : public QObject
             return false;
         auto *w = qobject_cast<QWidget *>(object);
         if (!w || constructing || w->inherits("QQuickWidget") ||
-            w->objectName() == "moltorinoGpuChrome")
+            w->objectName() == "glassorinoGpuChrome")
             return false;
         if (event->type() == QEvent::Show && w->isWindow() && !layer(w) &&
             !w->inherits("QDesktopWidget") &&
@@ -665,7 +777,9 @@ class ChromeEvents final : public QObject
 bool enabled()
 {
 #    ifdef MOLTORINO_WITH_QTQUICK_GLASS_PREVIEW
-    return !qEnvironmentVariableIsSet("MOLTORINO_GLASS_DISABLE");
+    return !qEnvironmentVariableIsSet("MOLTORINO_GLASS_DISABLE") &&
+           qEnvironmentVariable("QT_QUICK_BACKEND").trimmed().compare(
+               QStringLiteral("software"), Qt::CaseInsensitive) != 0;
 #    else
     return false;
 #    endif
